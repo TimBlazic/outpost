@@ -5,6 +5,7 @@ import type { FirmSettings, Lead, LeadStatus } from "@/lib/data";
 import { leadCategories } from "@/lib/data";
 import type {
   QualifyCompanywallResult,
+  QualifyIdentityResult,
   QualifyLighthouseResult,
   QualifyRating,
   QualifySiteResult,
@@ -32,6 +33,7 @@ function parseJsonObject(text: string): Record<string, unknown> {
 export async function runQualifyVerdict(input: {
   website: string;
   site: QualifySiteResult;
+  identity: QualifyIdentityResult;
   lighthouse: QualifyLighthouseResult;
   companywall: QualifyCompanywallResult;
 }): Promise<{
@@ -70,12 +72,14 @@ notesMarkdown (short markdown),
 company, contact, email, phone, country, category, value (number EUR estimate or 0).
 category MUST be one of: ${leadCategories.join(", ")}.
 Prefer country "Slovenia" when unclear. Use emails/phones from site data when present.
+For "company", prefer the resolved identity / Companywall legal name over the domain brand when they differ.
 Be honest: weak finances or a strong modern site → maybe/no-go.`,
     messages: [
       {
         role: "user",
         content: [
           `Website: ${input.website}`,
+          `Resolved identity: ${JSON.stringify(input.identity)}`,
           `Title: ${input.site.title ?? ""}`,
           `Meta: ${input.site.description ?? ""}`,
           `Emails: ${input.site.emails.join(", ")}`,
@@ -127,6 +131,7 @@ Be honest: weak finances or a strong modern site → maybe/no-go.`,
       company:
         String(data.company ?? "").trim() ||
         (cwTrusted ? input.companywall.matchedName : undefined) ||
+        input.identity.companyName ||
         input.site.companyNameHint ||
         input.site.title?.split(/[|\-–—]/)[0]?.trim() ||
         input.website,

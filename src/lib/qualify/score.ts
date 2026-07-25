@@ -24,6 +24,8 @@ export function computeFitScore(r: QualifyResult): number {
     score -= 3;
   }
 
+  if (r.identity.source === "ai" && r.identity.confidence >= 70) score += 2;
+
   if (r.companywall.status === "ok") {
     if (r.companywall.revenue || r.companywall.profit) score += 6;
     else score += 2;

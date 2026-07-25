@@ -9,7 +9,7 @@ import { getCurrentProfile, requireStudioSession } from "@/lib/auth/session";
 import type { Lead, LeadStatus } from "@/lib/data";
 import { leadCategories } from "@/lib/data";
 import { getFirmSettings } from "@/lib/store";
-import { qualifyLead } from "./orchestrate";
+import { qualifyLead, requalifyWithCompanywall } from "./orchestrate";
 import type { QualifyResult } from "./types";
 import { runQualifyDraft } from "./verdict";
 
@@ -21,6 +21,18 @@ export async function runLeadQualifyAction(input: {
   return qualifyLead({
     websiteUrl: input.websiteUrl,
     companywallUrl: input.companywallUrl?.trim() || null,
+  });
+}
+
+/** Paste correct Companywall URL → re-scrape + verdict + draft only. */
+export async function requalifyWithCompanywallAction(input: {
+  previous: QualifyResult;
+  companywallUrl: string;
+}): Promise<QualifyResult> {
+  await requireStudioSession();
+  return requalifyWithCompanywall({
+    previous: input.previous,
+    companywallUrl: input.companywallUrl,
   });
 }
 

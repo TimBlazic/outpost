@@ -7,10 +7,21 @@ export type QualifySiteResult = {
   description: string | null;
   /** Best-effort brand / company name from the site itself. */
   companyNameHint: string | null;
+  /** Footer / copyright / about lines that often hold the legal name. */
+  identitySnippets: string[];
   excerpt: string;
   emails: string[];
   phones: string[];
   error?: string;
+};
+
+/** Company name resolved from the page before Companywall search. */
+export type QualifyIdentityResult = {
+  companyName: string;
+  tradeName: string | null;
+  confidence: number;
+  source: "ai" | "heuristic";
+  notes?: string;
 };
 
 export type QualifyLighthouseResult = {
@@ -43,6 +54,7 @@ export type QualifyCompanywallResult = {
 export type QualifyResult = {
   website: string;
   site: QualifySiteResult;
+  identity: QualifyIdentityResult;
   lighthouse: QualifyLighthouseResult;
   companywall: QualifyCompanywallResult;
   verdict: {

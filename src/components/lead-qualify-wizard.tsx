@@ -19,6 +19,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { leadCategories, leadStatuses, type LeadStatus } from "@/lib/data";
 import {
+  requalifyWithCompanywallAction,
   reviseQualifyDraftAction,
   runLeadQualifyAction,
   saveQualifiedLeadAction,
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 const STEPS = [
   "Site",
+  "Identity",
   "Lighthouse",
   "Companywall",
   "Verdict",
@@ -148,6 +150,7 @@ export function LeadQualifyWizard({
     return compileResearchMarkdown({
       website,
       site: result.site,
+      identity: result.identity,
       lighthouse: result.lighthouse,
       companywall,
       verdict: result.verdict,
@@ -167,6 +170,29 @@ export function LeadQualifyWizard({
       } catch (e) {
         setPhase("idle");
         setError(e instanceof Error ? e.message : "Qualify failed");
+      }
+    });
+  }
+
+  function rescoreWithCompanywall() {
+    if (!result) return;
+    const pasted = cwUrl.trim();
+    if (!pasted) {
+      setError("Paste a Companywall company URL first.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const r = await requalifyWithCompanywallAction({
+          previous: result,
+          companywallUrl: pasted,
+        });
+        applyResult(r);
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Companywall re-score failed"
+        );
       }
     });
   }
@@ -353,6 +379,31 @@ export function LeadQualifyWizard({
                 />
               </section>
 
+              <section className="rounded-xl border border-border/60 p-4">
+                <p className="mb-3 text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+                  Company identity
+                </p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Field
+                    label="Resolved name"
+                    value={result.identity.companyName}
+                  />
+                  <Field
+                    label="Trade / brand"
+                    value={result.identity.tradeName || "—"}
+                  />
+                  <Field
+                    label="Confidence"
+                    value={`${result.identity.confidence}/100 · ${result.identity.source}`}
+                  />
+                  {result.identity.notes ? (
+                    <div className="sm:col-span-3">
+                      <Field label="Notes" value={result.identity.notes} />
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+
               <section className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-xl border border-border/60 p-4">
                   <p className="mb-3 text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
@@ -420,10 +471,10 @@ export function LeadQualifyWizard({
                           />
                         </div>
                       ) : null}
-                      {cwUrl ? (
+                      {result.companywall.url ? (
                         <div className="sm:col-span-3">
                           <a
-                            href={cwUrl}
+                            href={result.companywall.url}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -441,21 +492,18 @@ export function LeadQualifyWizard({
                         {result.companywall.error
                           ? ` — ${result.companywall.error}`
                           : ""}
-                        . Paste the correct Companywall URL below, or use Edit
-                        for figures.
                       </p>
                       {result.companywall.candidates?.length ? (
                         <ul className="space-y-1 text-sm text-muted-foreground">
                           {result.companywall.candidates.map((c) => (
                             <li key={c.url}>
-                              <a
-                                href={c.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="underline-offset-2 hover:underline"
+                              <button
+                                type="button"
+                                className="text-left underline-offset-2 hover:underline"
+                                onClick={() => setCwUrl(c.url)}
                               >
                                 {c.name}
-                              </a>
+                              </button>
                               <span className="text-muted-foreground/70">
                                 {" "}
                                 · {c.score}/100
@@ -466,6 +514,38 @@ export function LeadQualifyWizard({
                       ) : null}
                     </div>
                   )}
+
+                  <div className="mt-4 space-y-2 border-t border-border/50 pt-3">
+                    <Label htmlFor="cw-rescore-url" className="text-xs">
+                      Wrong company? Paste Companywall URL and re-score
+                    </Label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        id="cw-rescore-url"
+                        value={cwUrl}
+                        onChange={(e) => setCwUrl(e.target.value)}
+                        placeholder="https://www.companywall.si/podjetje/…"
+                        className="h-9"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        disabled={pending || !cwUrl.trim()}
+                        onClick={rescoreWithCompanywall}
+                      >
+                        {pending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : null}
+                        Re-score
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Re-fetches Companywall + verdict + email only — keeps site
+                      &amp; Lighthouse.
+                    </p>
+                  </div>
                 </div>
               </section>
 

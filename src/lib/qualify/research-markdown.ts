@@ -1,5 +1,6 @@
 import type {
   QualifyCompanywallResult,
+  QualifyIdentityResult,
   QualifyLighthouseResult,
   QualifySiteResult,
   QualifyRating,
@@ -8,6 +9,7 @@ import type {
 export function compileResearchMarkdown(input: {
   website: string;
   site: QualifySiteResult;
+  identity: QualifyIdentityResult;
   lighthouse: QualifyLighthouseResult;
   companywall: QualifyCompanywallResult;
   verdict: {
@@ -34,6 +36,19 @@ export function compileResearchMarkdown(input: {
   if (input.site.excerpt) {
     lines.push("");
     lines.push(input.site.excerpt);
+  }
+
+  lines.push("");
+  lines.push(`## Company identity`);
+  lines.push(`- Name: ${input.identity.companyName}`);
+  if (input.identity.tradeName) {
+    lines.push(`- Trade / brand: ${input.identity.tradeName}`);
+  }
+  lines.push(
+    `- Source: ${input.identity.source} · confidence ${input.identity.confidence}/100`
+  );
+  if (input.identity.notes) {
+    lines.push(`- Notes: ${input.identity.notes}`);
   }
 
   lines.push("");

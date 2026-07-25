@@ -2,6 +2,7 @@ import { getCurrentProfile, requireStudioSession } from "@/lib/auth/session";
 import { getFirmSettings, getLeads } from "@/lib/store";
 import { lookupCompanywall } from "./companywall";
 import { fetchSite } from "./fetch-site";
+import { extractCompanyIdentity } from "./identity";
 import { runPageSpeed } from "./pagespeed";
 import { compileResearchMarkdown } from "./research-markdown";
 import type { QualifyResult } from "./types";
@@ -24,13 +25,11 @@ export async function qualifyLead(input: {
     getCurrentProfile(),
   ]);
 
-  const companyGuess =
-    site.companyNameHint ||
-    site.title?.split(/[|\-–—]/)[0]?.trim() ||
-    host;
+  // Resolve real company name from page copy before Companywall search.
+  const identity = await extractCompanyIdentity({ website, site });
 
   const companywall = await lookupCompanywall({
-    companyName: companyGuess,
+    companyName: identity.companyName,
     domain: host,
     companywallUrl: input.companywallUrl,
   });
@@ -38,6 +37,7 @@ export async function qualifyLead(input: {
   const ai = await runQualifyVerdict({
     website,
     site,
+    identity,
     lighthouse,
     companywall,
   });
@@ -45,6 +45,7 @@ export async function qualifyLead(input: {
   const description = compileResearchMarkdown({
     website,
     site,
+    identity,
     lighthouse,
     companywall,
     verdict: ai.verdict,
@@ -69,11 +70,85 @@ export async function qualifyLead(input: {
   return {
     website,
     site,
+    identity,
     lighthouse,
     companywall,
     verdict: ai.verdict,
     draft,
     suggested,
     duplicateLeadId: findLeadIdByWebsiteHost(leads, host),
+  };
+}
+
+/**
+ * Re-run only Companywall scrape + AI verdict + draft, keeping site / identity / Lighthouse.
+ * Used when auto-match is wrong and the user pastes the correct Companywall URL.
+ */
+export async function requalifyWithCompanywall(input: {
+  previous: QualifyResult;
+  companywallUrl: string;
+}): Promise<QualifyResult> {
+  await requireStudioSession();
+  const cwUrl = input.companywallUrl.trim();
+  if (!cwUrl) {
+    throw new Error("Paste a Companywall URL first");
+  }
+
+  const { previous } = input;
+  const host = websiteHost(previous.website);
+
+  const [companywall, settings, profile] = await Promise.all([
+    lookupCompanywall({
+      companyName: previous.identity.companyName,
+      domain: host,
+      companywallUrl: cwUrl,
+    }),
+    getFirmSettings(),
+    getCurrentProfile(),
+  ]);
+
+  const ai = await runQualifyVerdict({
+    website: previous.website,
+    site: previous.site,
+    identity: previous.identity,
+    lighthouse: previous.lighthouse,
+    companywall,
+  });
+
+  const description = compileResearchMarkdown({
+    website: previous.website,
+    site: previous.site,
+    identity: previous.identity,
+    lighthouse: previous.lighthouse,
+    companywall,
+    verdict: ai.verdict,
+  });
+
+  const suggested = {
+    ...ai.suggested,
+    source: "Cold email" as const,
+    description,
+  };
+
+  const senderName =
+    profile.name?.split(" ")[0] || settings.firmName || "Tim";
+
+  const draft = await runQualifyDraft({
+    website: previous.website,
+    suggested,
+    settings,
+    senderName,
+  });
+
+  return {
+    website: previous.website,
+    site: previous.site,
+    identity: previous.identity,
+    lighthouse: previous.lighthouse,
+    companywall,
+    verdict: ai.verdict,
+    draft,
+    suggested,
+    duplicateLeadId: previous.duplicateLeadId,
   };
 }
