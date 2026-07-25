@@ -59,14 +59,39 @@ export function getPortalBaseUrl() {
   return normalizeBase(process.env.NEXT_PUBLIC_PORTAL_URL);
 }
 
+/**
+ * When studio runs on admin.*, portal lives on client.* of the same root domain.
+ * Prefer NEXT_PUBLIC_PORTAL_URL; otherwise rewrite admin → client from the current origin/host.
+ */
+export function resolvePortalBaseUrl(fallbackOriginOrHost?: string) {
+  const fromEnv = getPortalBaseUrl();
+  if (fromEnv) return fromEnv;
+
+  const raw = (fallbackOriginOrHost ?? "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = raw.includes("://")
+      ? new URL(raw)
+      : new URL(`https://${raw}`);
+    const host = stripPort(url.hostname);
+    if (host.startsWith("admin.")) {
+      url.hostname = `client.${host.slice("admin.".length)}`;
+      return normalizeBase(url.origin);
+    }
+    return normalizeBase(url.origin);
+  } catch {
+    return normalizeBase(raw);
+  }
+}
+
 export function buildPortalPath(token: string) {
   return `/portal/${token}`;
 }
 
-/** Absolute portal link. Prefers NEXT_PUBLIC_PORTAL_URL, then fallbackOrigin. */
+/** Absolute portal link. Prefers NEXT_PUBLIC_PORTAL_URL, then admin→client rewrite. */
 export function buildPortalUrl(token: string, fallbackOrigin?: string) {
-  const base =
-    getPortalBaseUrl() || normalizeBase(fallbackOrigin) || getAdminBaseUrl();
+  const base = resolvePortalBaseUrl(fallbackOrigin);
   return `${base}${buildPortalPath(token)}`;
 }
 

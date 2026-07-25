@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import {
   getHostRole,
-  getPortalBaseUrl,
   getRequestHostname,
   isClientHostAllowedPath,
   isPortalPath,
+  resolvePortalBaseUrl,
 } from "@/lib/hosts";
 import { updateSession } from "@/lib/supabase/middleware";
 
@@ -33,10 +33,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // admin.timblazic.dev — send /portal/* to the client host when configured
+  // admin.timblazic.dev — send /portal/* to client.* (env or admin→client rewrite)
   if (role === "admin" && isPortalPath(pathname)) {
-    const portalBase = getPortalBaseUrl();
-    if (portalBase) {
+    const portalBase = resolvePortalBaseUrl(
+      request.nextUrl.origin || hostname
+    );
+    if (portalBase && !portalBase.includes(`://${hostname}`)) {
       return NextResponse.redirect(`${portalBase}${pathname}${search}`);
     }
   }
