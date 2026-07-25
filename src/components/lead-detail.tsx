@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   ArrowLeft,
@@ -24,6 +25,7 @@ import {
   CalendarClock,
   Copy,
   Check,
+  X,
 } from "lucide-react";
 
 import {
@@ -157,12 +159,20 @@ export function LeadDetail({
   activities,
   notes: rawNotes,
   files,
+  mode = "page",
+  onClose,
+  onChanged,
 }: {
   lead: Lead;
   activities: Activity[];
   notes: Note[];
   files: Attachment[];
+  mode?: "page" | "drawer";
+  onClose?: () => void;
+  /** Reload activities/notes/files after a mutation (drawer). */
+  onChanged?: () => void;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const notes = [...rawNotes].sort(
@@ -172,15 +182,23 @@ export function LeadDetail({
     ? dueState(lead.nextFollowUp)
     : null;
   const site = websiteHref(lead.website);
+  const drawer = mode === "drawer";
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">
-      <Link
-        href="/leads"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> Leads
-      </Link>
+  function afterMutation() {
+    router.refresh();
+    onChanged?.();
+  }
+
+  const body = (
+    <>
+      {!drawer ? (
+        <Link
+          href="/leads"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> Leads
+        </Link>
+      ) : null}
 
       {/* Header */}
       <header className="space-y-5">
@@ -196,9 +214,13 @@ export function LeadDetail({
                 value={lead.status}
                 disabled={pending}
                 onChange={(e) =>
-                  startTransition(() =>
-                    setLeadStatus(lead.id, e.target.value as LeadStatus)
-                  )
+                  startTransition(async () => {
+                    await setLeadStatus(
+                      lead.id,
+                      e.target.value as LeadStatus
+                    );
+                    afterMutation();
+                  })
                 }
               >
                 {leadStatuses.map((s) => (
@@ -213,7 +235,12 @@ export function LeadDetail({
                 </Badge>
               ))}
             </div>
-            <h1 className="text-3xl font-semibold tracking-tight">
+            <h1
+              className={cn(
+                "font-semibold tracking-tight",
+                drawer ? "text-2xl" : "text-3xl"
+              )}
+            >
               {lead.company}
             </h1>
             <p className="text-muted-foreground">
@@ -356,11 +383,19 @@ export function LeadDetail({
         </TabsList>
 
         <TabsContent value="timeline">
-          <ActivityPanel leadId={lead.id} activities={activities} />
+          <ActivityPanel
+            leadId={lead.id}
+            activities={activities}
+            onChanged={afterMutation}
+          />
         </TabsContent>
 
         <TabsContent value="notes" className="space-y-3">
-          <NotesPanel leadId={lead.id} notes={notes} />
+          <NotesPanel
+            leadId={lead.id}
+            notes={notes}
+            onChanged={afterMutation}
+          />
         </TabsContent>
 
         <TabsContent value="files">
@@ -403,7 +438,52 @@ export function LeadDetail({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
+  );
+
+  if (drawer) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/80 bg-background/95 px-5 py-3 backdrop-blur-sm">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{lead.company}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {lead.contact || "Lead"}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              title="Open full page"
+              className="size-8"
+            >
+              <Link href={`/leads/${lead.id}`}>
+                <ExternalLink className="size-3.5" />
+              </Link>
+            </Button>
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                title="Close"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-5 py-5">
+          {body}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">{body}</div>
   );
 }
 
@@ -443,9 +523,11 @@ function Fact({
 function ActivityPanel({
   leadId,
   activities,
+  onChanged,
 }: {
   leadId: string;
   activities: Activity[];
+  onChanged?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -460,6 +542,7 @@ function ActivityPanel({
       setTitle("");
       setDetail("");
       setOpen(false);
+      onChanged?.();
     });
   }
 
@@ -546,7 +629,15 @@ function ActivityPanel({
 
 // ---- Notes -----------------------------------------------------------------
 
-function NotesPanel({ leadId, notes }: { leadId: string; notes: Note[] }) {
+function NotesPanel({
+  leadId,
+  notes,
+  onChanged,
+}: {
+  leadId: string;
+  notes: Note[];
+  onChanged?: () => void;
+}) {
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -564,6 +655,7 @@ function NotesPanel({ leadId, notes }: { leadId: string; notes: Note[] }) {
       setBody("");
       setPinned(false);
       setOpen(false);
+      onChanged?.();
     });
   }
 
@@ -582,6 +674,7 @@ function NotesPanel({ leadId, notes }: { leadId: string; notes: Note[] }) {
         body: editBody.trim(),
       });
       setEditingId(null);
+      onChanged?.();
     });
   }
 
@@ -690,7 +783,10 @@ function NotesPanel({ leadId, notes }: { leadId: string; notes: Note[] }) {
                       aria-label={n.pinned ? "Unpin" : "Pin"}
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                       onClick={() =>
-                        startTransition(() => toggleNotePin(n.id, leadId))
+                        startTransition(async () => {
+                          await toggleNotePin(n.id, leadId);
+                          onChanged?.();
+                        })
                       }
                     >
                       {n.pinned ? (
@@ -703,7 +799,10 @@ function NotesPanel({ leadId, notes }: { leadId: string; notes: Note[] }) {
                       aria-label="Delete note"
                       className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                       onClick={() =>
-                        startTransition(() => deleteNote(n.id, leadId))
+                        startTransition(async () => {
+                          await deleteNote(n.id, leadId);
+                          onChanged?.();
+                        })
                       }
                     >
                       <Trash2 className="size-3.5" />

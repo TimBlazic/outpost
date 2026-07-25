@@ -14,28 +14,43 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 lg:p-6">
+    <div className="flex h-full min-h-0 flex-col gap-6 p-4 lg:p-6">
       <PageHeader
         title="Settings"
         description="Profile, studio goals, billing, and AI."
       />
-      <Tabs defaultValue="profile" className="gap-6">
-        <TabsList>
+      <Tabs
+        defaultValue="profile"
+        className="flex min-h-0 flex-1 flex-col gap-6"
+      >
+        <TabsList className="shrink-0">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="studio">Studio</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
         </TabsList>
-        <TabsContent value="profile">
+        <TabsContent
+          value="profile"
+          className="mt-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+        >
           <ProfileForm profile={profile} />
         </TabsContent>
-        <TabsContent value="studio">
+        <TabsContent
+          value="studio"
+          className="mt-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+        >
           <SettingsForm settings={settings} section="studio" />
         </TabsContent>
-        <TabsContent value="billing">
+        <TabsContent
+          value="billing"
+          className="mt-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+        >
           <SettingsForm settings={settings} section="billing" />
         </TabsContent>
-        <TabsContent value="ai">
+        <TabsContent
+          value="ai"
+          className="mt-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+        >
           <SettingsForm settings={settings} section="ai" />
         </TabsContent>
       </Tabs>

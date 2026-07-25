@@ -7,25 +7,36 @@ import { TableRow } from "@/components/ui/table";
 
 export function ClickableRow({
   href,
+  onSelect,
   children,
   className,
 }: {
-  href: string;
+  href?: string;
+  /** Prefer over navigation — e.g. open a side drawer. */
+  onSelect?: () => void;
   children: React.ReactNode;
   className?: string;
 }) {
   const router = useRouter();
+
+  function activate() {
+    if (onSelect) {
+      onSelect();
+      return;
+    }
+    if (href) router.push(href);
+  }
 
   return (
     <TableRow
       role="link"
       tabIndex={0}
       className={cn("cursor-pointer", className)}
-      onClick={() => router.push(href)}
+      onClick={activate}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          router.push(href);
+          activate();
         }
       }}
     >

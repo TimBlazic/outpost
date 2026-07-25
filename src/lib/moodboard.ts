@@ -193,7 +193,7 @@ export const MOODBOARD_PINS: MoodboardPin[] = [
   },
   {
     id: "1062427368362576464",
-    src: "https://i.pinimg.com/736x/1f/84/25/1f84256e6c9bf33dd2d2652159343a48.jpg",
+    src: "https://www.pinterest.com/pin/1062427368362739178/",
     alt: "Untitled",
   },
   {
@@ -343,7 +343,7 @@ export const MOODBOARD_PINS: MoodboardPin[] = [
   },
   {
     id: "1062427368362612821",
-    src: "https://i.pinimg.com/736x/d8/9b/85/d89b85c1dba142a674d100c5eda54b2c.png",
+    src: "https://i.pinimg.com/736x/d8/9b/85/d89b85c1dba142a674d100c5eda54b2c.jpg",
     alt: "Iman Gadzhi Black and White (Wallpaper B&W)",
   },
   {
@@ -368,7 +368,7 @@ export const MOODBOARD_PINS: MoodboardPin[] = [
   },
   {
     id: "1062427368362675857",
-    src: "https://i.pinimg.com/736x/3e/83/fd/3e83fda0bf90fc90f1c0c19cd924fd2b.png",
+    src: "https://i.pinimg.com/736x/3e/83/fd/3e83fda0bf90fc90f1c0c19cd924fd2b.jpg",
     alt: "Dream aesthetic 73",
   },
   {

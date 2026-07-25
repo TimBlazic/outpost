@@ -31,6 +31,10 @@ import {
   saveFirmSettings,
   syncLeadNoteCount,
   getPortalMessages,
+  getLeadById,
+  getNotesForLead,
+  getActivitiesForLead,
+  getAttachmentsFor,
 } from "./store";
 import type {
   Lead,
@@ -78,6 +82,18 @@ function revalidateLead(id: string) {
   revalidatePath("/leads");
   revalidatePath(`/leads/${id}`);
   revalidatePath("/");
+}
+
+/** Bundle for the lead side drawer (list/kanban → peek). */
+export async function getLeadDetailAction(id: string) {
+  const lead = await getLeadById(id);
+  if (!lead) return null;
+  const [activities, notes, files] = await Promise.all([
+    getActivitiesForLead(id),
+    getNotesForLead(id),
+    getAttachmentsFor("lead", id),
+  ]);
+  return { lead, activities, notes, files };
 }
 
 // ---- Leads ----------------------------------------------------------------

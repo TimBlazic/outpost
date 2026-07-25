@@ -84,6 +84,15 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 Never expose this key to the browser. Studio CRM still uses the publishable key + auth.
 
+### Lead Qualify pipeline (optional)
+
+`/leads/qualify` uses Anthropic (same as AI email) plus optional PageSpeed Insights:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+PAGESPEED_API_KEY=   # Google PageSpeed Insights API key; if unset, Lighthouse step is skipped
+```
+
 ## 5. Force file store (optional)
 
 ```env

@@ -13,7 +13,6 @@ import {
   Receipt,
   BookOpen,
   Images,
-  Settings,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -47,7 +46,6 @@ const nav = [
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/docs", label: "Docs", icon: BookOpen },
   { href: "/moodboard", label: "Moodboard", icon: Images },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 function SidebarNav({
@@ -346,7 +344,10 @@ export function AppShell({
         <main
           className={cn(
             "flex min-h-0 flex-1 flex-col",
-            pathname.startsWith("/messages")
+            pathname.startsWith("/messages") ||
+              pathname === "/leads" ||
+              pathname === "/tasks" ||
+              pathname === "/settings"
               ? "overflow-hidden"
               : "overflow-y-auto"
           )}

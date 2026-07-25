@@ -242,7 +242,7 @@ export function TasksWorkspace({
   );
 
   return (
-    <div className="space-y-6 p-4 lg:p-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4 lg:p-6">
       <PageHeader
         title="Tasks & follow-ups"
         description={`${openCount} open · ${overdueCount} overdue`}
@@ -262,8 +262,11 @@ export function TasksWorkspace({
           actionHref="/tasks?new=1"
         />
       ) : (
-        <Tabs defaultValue="list" className="gap-4">
-          <TabsList>
+        <Tabs
+          defaultValue="list"
+          className="flex min-h-0 flex-1 flex-col gap-4"
+        >
+          <TabsList className="shrink-0">
             <TabsTrigger value="list">
               <ListTodo className="size-4" /> List
             </TabsTrigger>
@@ -272,7 +275,10 @@ export function TasksWorkspace({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="list" className="space-y-6">
+          <TabsContent
+            value="list"
+            className="mt-0 min-h-0 flex-1 space-y-6 overflow-y-auto data-[state=inactive]:hidden"
+          >
             {groups.map((g) => {
               const items = tasks.filter(
                 (t) => dueState(t.due) === g.key && !done[t.id]
@@ -390,17 +396,22 @@ export function TasksWorkspace({
             })}
           </TabsContent>
 
-          <TabsContent value="kanban">
-            <p className="mb-3 text-xs text-muted-foreground">
+          <TabsContent
+            value="kanban"
+            className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+          >
+            <p className="mb-3 shrink-0 text-xs text-muted-foreground">
               Drag a card into another column to update its status. Click to
               open.
             </p>
-            <TasksKanban
-              tasks={tasks}
-              leads={leads}
-              projects={projects}
-              onOpen={openTask}
-            />
+            <div className="min-h-0 flex-1">
+              <TasksKanban
+                tasks={tasks}
+                leads={leads}
+                projects={projects}
+                onOpen={openTask}
+              />
+            </div>
           </TabsContent>
         </Tabs>
       )}

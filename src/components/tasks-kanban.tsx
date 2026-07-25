@@ -123,15 +123,15 @@ function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
-    <div className="w-72 shrink-0">
-      <div className="mb-2 flex items-center justify-between px-1">
+    <div className="flex h-full w-72 shrink-0 flex-col">
+      <div className="mb-2 flex shrink-0 items-center justify-between px-1">
         <h3 className="text-sm font-semibold">{status}</h3>
         <span className="text-xs text-muted-foreground">{tasks.length}</span>
       </div>
       <div
         ref={setNodeRef}
         className={cn(
-          "flex min-h-32 flex-col gap-2 rounded-lg bg-muted/40 p-2 transition-colors",
+          "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted/40 p-2 transition-colors",
           isOver && "bg-primary/10 ring-2 ring-primary/25"
         )}
       >
@@ -234,32 +234,34 @@ export function TasksKanban({
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {taskStatuses.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            tasks={byColumn.get(status) ?? []}
-            linkFor={linkFor}
-            onOpen={onOpen}
-          />
-        ))}
-      </div>
-      <DragOverlay dropAnimation={null}>
-        {activeTask ? (
-          <TaskCard
-            task={activeTask}
-            linkLabel={linkFor(activeTask)}
-            dragging
-          />
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+    <div className="h-full min-h-0">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex h-full min-h-0 gap-4 overflow-x-auto overflow-y-hidden">
+          {taskStatuses.map((status) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              tasks={byColumn.get(status) ?? []}
+              linkFor={linkFor}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
+        <DragOverlay dropAnimation={null}>
+          {activeTask ? (
+            <TaskCard
+              task={activeTask}
+              linkLabel={linkFor(activeTask)}
+              dragging
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   Receipt,
   Search,
   Settings,
+  Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -61,6 +62,14 @@ const STATIC_ACTIONS: PaletteItem[] = [
     subtitle: "Create a lead",
     href: "/leads/new",
     icon: Plus,
+    section: "Create",
+  },
+  {
+    id: "qualify-url",
+    title: "Qualify URL",
+    subtitle: "Research site → lead + cold email",
+    href: "/leads?qualify=1",
+    icon: Sparkles,
     section: "Create",
   },
   {

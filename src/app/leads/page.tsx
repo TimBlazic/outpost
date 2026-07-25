@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -5,6 +6,10 @@ import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { LeadsView } from "@/components/leads-view";
 import { ExportLeadsButton } from "@/components/export-leads-button";
+import {
+  LeadQualifyDialog,
+  LeadQualifyDialogFromSearch,
+} from "@/components/lead-qualify-dialog";
 import { getLeads } from "@/lib/store";
 import { eur } from "@/lib/format";
 
@@ -24,6 +29,7 @@ export default async function LeadsPage() {
         description={`${open.length} open leads · ${eur(openValue)} in pipeline`}
       >
         <ExportLeadsButton leads={leads} />
+        <LeadQualifyDialog />
         <Button asChild>
           <Link href="/leads/new">
             <Plus className="size-4" />
@@ -31,7 +37,12 @@ export default async function LeadsPage() {
           </Link>
         </Button>
       </PageHeader>
-      <LeadsView leads={leads} />
+      <Suspense fallback={null}>
+        <LeadQualifyDialogFromSearch />
+      </Suspense>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <LeadsView leads={leads} />
+      </div>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
@@ -20,7 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { type Lead, type LeadStatus } from "@/lib/data";
+import { leadStatuses, type Lead, type LeadStatus } from "@/lib/data";
 import { setLeadStatus } from "@/lib/actions";
 import { eur, leadStatusColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -28,39 +27,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/status-pill";
 
-/** Columns shown on the board. Dropping onto a column sets this status. */
-export const kanbanColumns: LeadStatus[] = [
-  "New",
-  "Contacted",
-  "Follow-up needed",
-  "Replied",
-  "Meeting booked",
-  "Proposal sent",
-  "Negotiating",
-  "Won",
-];
-
-/** Statuses that appear in a column even if they aren't the column's own status. */
-const columnMembership: Partial<Record<LeadStatus, LeadStatus[]>> = {
-  New: ["New", "Researching", "Ready to contact"],
-  Contacted: ["Contacted"],
-  "Follow-up needed": ["Follow-up needed"],
-  Replied: ["Replied"],
-  "Meeting booked": ["Meeting booked"],
-  "Proposal sent": ["Proposal sent"],
-  Negotiating: ["Negotiating"],
-  Won: ["Won"],
-};
-
-function columnForStatus(status: LeadStatus): LeadStatus | null {
-  for (const col of kanbanColumns) {
-    if (columnMembership[col]?.includes(status)) return col;
-  }
-  return null;
-}
+/** Same statuses as the lead table / detail — one column each. */
+export const kanbanColumns: LeadStatus[] = [...leadStatuses];
 
 function LeadCard({ lead, dragging }: { lead: Lead; dragging?: boolean }) {
-  const home = columnForStatus(lead.status);
   return (
     <Card
       className={cn(
@@ -68,20 +38,7 @@ function LeadCard({ lead, dragging }: { lead: Lead; dragging?: boolean }) {
         dragging && "rotate-1 shadow-lg ring-2 ring-primary/30"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <Link
-          href={`/leads/${lead.id}`}
-          className="text-sm font-medium leading-tight hover:underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {lead.company}
-        </Link>
-        {home && lead.status !== home && (
-          <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-            {lead.status}
-          </Badge>
-        )}
-      </div>
+      <p className="text-sm font-medium leading-tight">{lead.company}</p>
       <p className="text-xs text-muted-foreground">{lead.contact}</p>
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold">{eur(lead.value)}</span>
@@ -106,7 +63,13 @@ function LeadCard({ lead, dragging }: { lead: Lead; dragging?: boolean }) {
   );
 }
 
-function SortableLeadCard({ lead }: { lead: Lead }) {
+function SortableLeadCard({
+  lead,
+  onOpen,
+}: {
+  lead: Lead;
+  onOpen?: (id: string) => void;
+}) {
   const {
     attributes,
     listeners,
@@ -127,6 +90,7 @@ function SortableLeadCard({ lead }: { lead: Lead }) {
       className="cursor-grab touch-none active:cursor-grabbing"
       {...attributes}
       {...listeners}
+      onClick={() => onOpen?.(lead.id)}
     >
       <LeadCard lead={lead} />
     </div>
@@ -136,9 +100,11 @@ function SortableLeadCard({ lead }: { lead: Lead }) {
 function KanbanColumn({
   status,
   leads,
+  onOpen,
 }: {
   status: LeadStatus;
   leads: Lead[];
+  onOpen?: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: status,
@@ -147,8 +113,8 @@ function KanbanColumn({
   const total = leads.reduce((s, l) => s + l.value, 0);
 
   return (
-    <div className="w-72 shrink-0">
-      <div className="mb-2 flex items-center justify-between px-1">
+    <div className="flex h-full w-72 shrink-0 flex-col">
+      <div className="mb-2 flex shrink-0 items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <StatusPill label={status} className={leadStatusColor[status]} />
           <span className="text-xs text-muted-foreground">{leads.length}</span>
@@ -158,7 +124,7 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "flex min-h-32 flex-col gap-2 rounded-lg bg-muted/40 p-2 transition-colors",
+          "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted/40 p-2 transition-colors",
           isOver && "bg-primary/10 ring-2 ring-primary/25"
         )}
       >
@@ -167,7 +133,7 @@ function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {leads.map((l) => (
-            <SortableLeadCard key={l.id} lead={l} />
+            <SortableLeadCard key={l.id} lead={l} onOpen={onOpen} />
           ))}
         </SortableContext>
         {leads.length === 0 && (
@@ -180,7 +146,13 @@ function KanbanColumn({
   );
 }
 
-export function LeadsKanban({ leads: initialLeads }: { leads: Lead[] }) {
+export function LeadsKanban({
+  leads: initialLeads,
+  onOpen,
+}: {
+  leads: Lead[];
+  onOpen?: (id: string) => void;
+}) {
   const [leads, setLeads] = useState(initialLeads);
   const [, startTransition] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -198,8 +170,7 @@ export function LeadsKanban({ leads: initialLeads }: { leads: Lead[] }) {
     const map = new Map<LeadStatus, Lead[]>();
     for (const col of kanbanColumns) map.set(col, []);
     for (const lead of leads) {
-      const col = columnForStatus(lead.status);
-      if (col) map.get(col)!.push(lead);
+      map.get(lead.status)?.push(lead);
     }
     return map;
   }, [leads]);
@@ -221,11 +192,11 @@ export function LeadsKanban({ leads: initialLeads }: { leads: Lead[] }) {
     const overId = String(over.id);
 
     let targetStatus: LeadStatus | null = null;
-    if (kanbanColumns.includes(overId as LeadStatus)) {
+    if ((leadStatuses as readonly string[]).includes(overId)) {
       targetStatus = overId as LeadStatus;
     } else {
       const overLead = leads.find((l) => l.id === overId);
-      if (overLead) targetStatus = columnForStatus(overLead.status);
+      if (overLead) targetStatus = overLead.status;
     }
 
     if (!targetStatus) return;
@@ -240,24 +211,27 @@ export function LeadsKanban({ leads: initialLeads }: { leads: Lead[] }) {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {kanbanColumns.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            leads={byColumn.get(status) ?? []}
-          />
-        ))}
-      </div>
-      <DragOverlay dropAnimation={null}>
-        {activeLead ? <LeadCard lead={activeLead} dragging /> : null}
-      </DragOverlay>
-    </DndContext>
+    <div className="h-full min-h-0">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex h-full min-h-0 gap-4 overflow-x-auto overflow-y-hidden">
+          {kanbanColumns.map((status) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              leads={byColumn.get(status) ?? []}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
+        <DragOverlay dropAnimation={null}>
+          {activeLead ? <LeadCard lead={activeLead} dragging /> : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
   );
 }
