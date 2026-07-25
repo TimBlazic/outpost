@@ -59,6 +59,52 @@ export function getPortalBaseUrl() {
   return normalizeBase(process.env.NEXT_PUBLIC_PORTAL_URL);
 }
 
+/** Resolve the public client-portal origin (login, callback, etc.). */
+export function getClientPortalOrigin(requestOrigin?: string) {
+  const origin = normalizeBase(requestOrigin);
+  if (origin) {
+    try {
+      const host = stripPort(new URL(origin).hostname);
+      if (host === "localhost" || host === "127.0.0.1") {
+        return origin;
+      }
+      if (getHostRole(host) === "client") {
+        return origin;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const portal = getPortalBaseUrl();
+  if (portal) return portal;
+  if (origin) return origin;
+  return "http://localhost:3000";
+}
+
+/**
+ * OTP callback after the client requests a fresh magic link from /client-login.
+ * - localhost → stay on local origin (dev)
+ * - client host → that origin
+ * - otherwise → NEXT_PUBLIC_PORTAL_URL (production client portal)
+ */
+export function getClientAuthCallbackUrl(requestOrigin?: string) {
+  return `${getClientPortalOrigin(requestOrigin)}/auth/callback?next=/`;
+}
+
+/** Stable URL to share with clients (does not expire). */
+export function getClientPortalLoginUrl(
+  requestOrigin?: string,
+  portalEmail?: string | null,
+  portalLocale?: "en" | "sl" | null
+) {
+  const url = new URL(`${getClientPortalOrigin(requestOrigin)}/client-login`);
+  const email = (portalEmail ?? "").trim().toLowerCase();
+  if (email) url.searchParams.set("email", email);
+  if (portalLocale === "sl") url.searchParams.set("lang", "sl");
+  return url.toString();
+}
+
 /**
  * When studio runs on admin.*, portal lives on client.* of the same root domain.
  * Prefer NEXT_PUBLIC_PORTAL_URL; otherwise rewrite admin → client from the current origin/host.
@@ -101,8 +147,14 @@ export function isPortalPath(pathname: string) {
 
 export function isClientHostAllowedPath(pathname: string) {
   return (
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/client-login" ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/projects") ||
     isPortalPath(pathname) ||
-    pathname.startsWith("/api/files") ||
-    pathname.startsWith("/auth")
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api/portal/") ||
+    pathname.startsWith("/api/files/")
   );
 }

@@ -6,7 +6,7 @@ export type Member = {
   id: string;
   name: string;
   initials: string;
-  role: "Admin" | "Member";
+  role: "Admin" | "Member" | "Client";
   avatarUrl: string | null;
 };
 
@@ -30,7 +30,7 @@ export function normalizeMember(m: Member): Member {
     ...m,
     initials: m.initials || initialsFromName(m.name),
     avatarUrl: m.avatarUrl ?? null,
-    role: m.role === "Admin" ? "Admin" : "Member",
+    role: m.role === "Admin" ? "Admin" : m.role === "Client" ? "Client" : "Member",
   };
 }
 
@@ -524,7 +524,8 @@ export type AttachmentParent =
   | "portal_update"
   | "ticket"
   | "ticket_comment"
-  | "task";
+  | "task"
+  | "portal_message";
 
 // ---- Clients --------------------------------------------------------------
 
@@ -547,6 +548,14 @@ export type Client = {
   vatId: string;
   registrationNumber: string;
   paymentTermsDays: number | null;
+  authUserId: string | null;
+  portalEmail: string | null;
+  onboardingCompletedAt: string | null;
+  /** Portal + onboarding UI language for this client account. */
+  portalLocale: "en" | "sl";
+  billingKind: "person" | "company" | null;
+  firstName: string;
+  lastName: string;
 };
 
 export function normalizeClient(c: Client): Client {
@@ -558,6 +567,13 @@ export function normalizeClient(c: Client): Client {
     vatId: c.vatId ?? "",
     registrationNumber: c.registrationNumber ?? "",
     paymentTermsDays: c.paymentTermsDays ?? null,
+    authUserId: c.authUserId ?? null,
+    portalEmail: c.portalEmail ?? null,
+    onboardingCompletedAt: c.onboardingCompletedAt ?? null,
+    portalLocale: c.portalLocale === "sl" ? "sl" : "en",
+    billingKind: c.billingKind ?? null,
+    firstName: c.firstName ?? "",
+    lastName: c.lastName ?? "",
   };
 }
 
@@ -574,6 +590,13 @@ function clientSeed(
     | "vatId"
     | "registrationNumber"
     | "paymentTermsDays"
+    | "authUserId"
+    | "portalEmail"
+    | "onboardingCompletedAt"
+    | "portalLocale"
+    | "billingKind"
+    | "firstName"
+    | "lastName"
   > &
     Partial<
       Pick<
@@ -584,6 +607,13 @@ function clientSeed(
         | "vatId"
         | "registrationNumber"
         | "paymentTermsDays"
+        | "authUserId"
+        | "portalEmail"
+        | "onboardingCompletedAt"
+        | "portalLocale"
+        | "billingKind"
+        | "firstName"
+        | "lastName"
       >
     >
 ): Client {
@@ -959,6 +989,45 @@ export type PortalComment = {
   createdAt: string;
 };
 
+/** One thread per project — studio ↔ client portal chat. */
+export type PortalMessage = {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  body: string;
+  authorKind: PortalAuthorKind;
+  authorId: string | null;
+  authorName: string;
+  createdAt: string;
+  editedAt: string | null;
+  /** Soft unsend — row kept, body hidden in UI. */
+  deletedAt: string | null;
+  attachmentId: string | null;
+};
+
+export type PortalMessageReaction = {
+  id: string;
+  messageId: string;
+  emoji: string;
+  authorKind: PortalAuthorKind;
+  authorName: string;
+  createdAt: string;
+};
+
+export function normalizePortalMessage(m: PortalMessage): PortalMessage {
+  return {
+    ...m,
+    parentId: m.parentId ?? null,
+    body: m.body ?? "",
+    authorName: m.authorName ?? "",
+    authorId: m.authorId ?? null,
+    attachmentId: m.attachmentId ?? null,
+    editedAt: m.editedAt ?? null,
+    deletedAt: m.deletedAt ?? null,
+    createdAt: m.createdAt || new Date().toISOString(),
+  };
+}
+
 export const portalUpdates: PortalUpdate[] = [];
 export const portalComments: PortalComment[] = [];
 
@@ -1031,6 +1100,12 @@ export type Project = {
   portalLocale: "en" | "sl";
   /** ISO timestamp when archived; null/undefined = active. */
   archivedAt: string | null;
+  /** Last portal heartbeat from the client (studio-only presence). */
+  portalClientLastSeenAt: string | null;
+  /** Studio last opened this project's chat. */
+  portalStudioLastReadAt: string | null;
+  /** Client last opened this project's chat. */
+  portalClientLastReadAt: string | null;
 };
 
 export type PhaseStatus = "upcoming" | "active" | "done";
@@ -1088,6 +1163,9 @@ export function normalizeProject(p: Project): Project {
     clientCanComment: p.clientCanComment ?? true,
     portalLocale: p.portalLocale === "sl" ? "sl" : "en",
     archivedAt: p.archivedAt ?? null,
+    portalClientLastSeenAt: p.portalClientLastSeenAt ?? null,
+    portalStudioLastReadAt: p.portalStudioLastReadAt ?? null,
+    portalClientLastReadAt: p.portalClientLastReadAt ?? null,
   };
 }
 
@@ -1139,6 +1217,9 @@ const portalDefaults = {
   clientCanComment: true,
   portalLocale: "en" as const,
   archivedAt: null,
+  portalClientLastSeenAt: null,
+  portalStudioLastReadAt: null,
+  portalClientLastReadAt: null,
 } as const;
 
 export const projects: Project[] = [

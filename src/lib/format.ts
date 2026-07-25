@@ -1,4 +1,12 @@
-import type { LeadStatus, ProjectStatus, TaskPriority } from "./data";
+import type { Client, LeadStatus, ProjectStatus, TaskPriority } from "./data";
+
+/** Person name for portal chat (first + last), not company / project label. */
+export function clientPersonName(
+  client: Pick<Client, "firstName" | "lastName" | "name">
+) {
+  const n = `${client.firstName ?? ""} ${client.lastName ?? ""}`.trim();
+  return n || client.name || "Client";
+}
 
 export function eur(n: number) {
   return new Intl.NumberFormat("en-IE", {

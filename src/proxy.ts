@@ -16,21 +16,16 @@ export async function proxy(request: NextRequest) {
 
   // client.timblazic.dev — portal only
   if (role === "client") {
-    if (pathname === "/") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/portal";
-      return NextResponse.redirect(url);
-    }
+    if (pathname === "/") return updateSession(request);
 
     if (!isClientHostAllowedPath(pathname)) {
       const url = request.nextUrl.clone();
-      url.pathname = "/portal";
+      url.pathname = "/client-login";
       url.search = "";
       return NextResponse.redirect(url);
     }
 
-    // No studio auth on the portal host
-    return NextResponse.next({ request });
+    return updateSession(request);
   }
 
   // admin.timblazic.dev — send /portal/* to client.* (env or admin→client rewrite)

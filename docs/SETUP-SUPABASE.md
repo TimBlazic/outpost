@@ -43,8 +43,18 @@ In Supabase SQL Editor, run in order:
 10. `supabase/migrations/20260724250000_lead_description.sql` (lead description)
 11. `supabase/migrations/20260725200000_invoices.sql` (invoices + billing fields)
 12. `supabase/migrations/20260725210000_billing_company_name.sql` (issuer company name)
-13. `supabase/seed.sql` (optional)
-14. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
+13. `supabase/migrations/20260725220000_invoice_project_paid.sql` (invoice ↔ project + paid_at)
+14. `supabase/migrations/20260725230000_ai_email_prompt.sql` (AI email system prompt)
+15. `supabase/migrations/20260725250000_portal_messages.sql` (portal project chat)
+16. `supabase/migrations/20260725260000_portal_messages_rich.sql` (replies, reactions, soft unsend)
+17. `supabase/migrations/20260725270000_portal_presence.sql` (client online heartbeat)
+18. `supabase/migrations/20260725280000_portal_read_cursors.sql` (chat read/unread cursors)
+19. `supabase/migrations/20260725290000_client_accounts.sql` (client portal accounts + Client role)
+20. `supabase/migrations/20260725300000_portal_realtime_rls.sql` (Realtime RLS for `portal_messages` + reactions)
+21. `supabase/migrations/20260725310000_ticket_comments_realtime_rls.sql` (Realtime RLS for ticket comments/reactions)
+22. `supabase/migrations/20260725320000_client_portal_locale.sql` (portal language on client account)
+23. `supabase/seed.sql` (optional)
+24. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
 
 Or with CLI:
 
@@ -54,12 +64,13 @@ npx supabase link --project-ref YOUR_REF
 npx supabase db push
 ```
 
-## 3. Auth (invite-only)
+## 3. Auth (invite-only + client magic links)
 
-1. Authentication → Providers → Email enabled  
-2. Authentication → Settings → **disable** “Allow new users to sign up”  
-3. Invite users via Authentication → Users → Invite  
-4. Set password from the invite email → `/login`
+1. Authentication → Providers → Email enabled.
+2. Authentication → Settings → **disable** “Allow new users to sign up”.
+3. Keep Studio users invite-only via Authentication → Users → Invite (admin/member accounts).
+4. Client portal accounts are created from the app (Client form/panel) and use **magic links only**.
+5. `supabase/migrations/20260725290000_client_accounts.sql` allows `profiles.role = 'Client'` and links invited auth users to `clients.auth_user_id`.
 
 ## 4. Storage + client portal
 
@@ -137,13 +148,40 @@ Also required for production portals: `SUPABASE_SERVICE_ROLE_KEY` (+ `OUTPOST_PO
 Supabase Auth → URL config:
 
 - Site URL: `https://admin.timblazic.dev`
-- Redirect URLs: `https://admin.timblazic.dev/**`
+- Redirect URLs:
+  - `https://admin.timblazic.dev/**`
+  - `https://client.timblazic.dev/auth/callback`
+  - `http://localhost:3000/auth/callback`
+  - `http://127.0.0.1:3000/auth/callback`
+  - (wildcard OK if supported) `http://localhost:3000/**`
+
+Local invites from `localhost:3000` now set `redirectTo` to `http://localhost:3000/auth/callback?next=/` (not production `client.*`). Expired/invalid links that land on `/#error=otp_expired` are redirected to `/client-login`.
+
+Magic-link callback flow:
+
+- Client signs in at `/client-login`.
+- App sends a magic link with `redirectTo = <client host>/auth/callback`.
+- Callback exchanges `code` for a session and redirects to the requested path (`next`).
 
 Inbound website leads should call **admin** (or the deployment URL), not the client host:
 
 `https://admin.timblazic.dev/api/leads/inbound`
 
 Copy-link in the studio uses `NEXT_PUBLIC_PORTAL_URL`, so clients always get `https://client.timblazic.dev/portal/<token>`.
+
+## 8. Manual QA checklist (Task 12)
+
+Run this script after migrations/env are configured:
+
+1. Create a client and enable portal account invite.
+2. Confirm magic link email is received (Inbucket or Supabase Auth logs in local/dev).
+3. Complete onboarding (billing + profile).
+4. Confirm login lands in a valid project view.
+5. If client has 2+ projects, verify project picker appears and switches correctly.
+6. Post chat messages both ways and confirm realtime delivery.
+7. Add ticket comments/reactions both ways and confirm realtime updates.
+8. Confirm studio unread badge/count still updates.
+9. Confirm client is never prompted for a portal PIN.
 
 ## Notes
 

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
 
 import { PageHeader } from "@/components/app-shell";
@@ -7,18 +9,52 @@ import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { ArchiveTabs } from "@/components/archive-tabs";
 import { ProjectsTable } from "@/components/projects-table";
-import { isArchived, paidAmount } from "@/lib/data";
+import { PortalFrame } from "@/components/portal-frame";
+import {
+  requireClientSession,
+  tryClientPortalSession,
+} from "@/lib/client-accounts/session";
+import { listProjectsForClient } from "@/lib/client-accounts/projects";
+import { isArchived, paidAmount, type Project } from "@/lib/data";
 import { getProjects } from "@/lib/store";
 import { getTeamMembers } from "@/lib/auth/session";
 import { eur } from "@/lib/format";
+import { getHostRole, getRequestHostname } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
+
+async function renderClientProjectsHome() {
+  const { client } = await requireClientSession();
+  if (!client.onboardingCompletedAt) {
+    redirect("/onboarding");
+  }
+  const projects = await listProjectsForClient(client.id);
+  if (projects.length === 1) {
+    redirect(`/projects/${projects[0].id}`);
+  }
+  return (
+    <PortalFrame>
+      <ClientProjectPicker projects={projects} clientName={client.name} />
+    </PortalFrame>
+  );
+}
 
 export default async function ProjectsPage({
   searchParams,
 }: {
   searchParams: Promise<{ view?: string }>;
 }) {
+  const reqHeaders = await headers();
+  const role = getHostRole(getRequestHostname(reqHeaders.get("host")));
+
+  if (role === "client") {
+    return renderClientProjectsHome();
+  }
+
+  if (role === "unified" && (await tryClientPortalSession())) {
+    return renderClientProjectsHome();
+  }
+
   const { view: viewParam } = await searchParams;
   const view = viewParam === "archived" ? "archived" : "active";
   const [projects, members] = await Promise.all([
@@ -90,6 +126,53 @@ export default async function ProjectsPage({
       ) : (
         <ProjectsTable projects={shown} members={members} />
       )}
+    </div>
+  );
+}
+
+// ---- Client project picker (session portal) ----
+
+function ClientProjectPicker({
+  projects,
+  clientName,
+}: {
+  projects: Project[];
+  clientName: string;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-12">
+      <div className="w-full max-w-lg space-y-8">
+        <div>
+          <p className="text-xs tracking-[0.18em] uppercase text-[var(--portal-muted)]">
+            {clientName}
+          </p>
+          <h1 className="portal-display mt-2 text-3xl italic leading-none">
+            Your projects
+          </h1>
+        </div>
+        {projects.length === 0 ? (
+          <p className="text-sm text-[var(--portal-muted)]">
+            No active projects yet.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {projects.map((p) => (
+              <li key={p.id}>
+                <Link
+                  href={`/projects/${p.id}`}
+                  className="block rounded-xl border border-[var(--portal-line)] bg-[var(--portal-surface)] px-5 py-4 transition-colors hover:border-[var(--portal-accent)]"
+                >
+                  <p className="font-medium text-[var(--portal-fg)]">{p.name}</p>
+                  <p className="mt-1 text-sm text-[var(--portal-muted)]">
+                    {p.status}
+                    {p.phase ? ` · ${p.phase}` : ""}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

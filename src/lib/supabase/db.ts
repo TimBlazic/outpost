@@ -18,6 +18,8 @@ import type {
   InvoiceClientSnapshot,
   InvoiceLineItem,
   PortalUpdate,
+  PortalMessage,
+  PortalMessageReaction,
   PortalComment,
   ProjectPhase,
   PhaseChecklistItem,
@@ -33,6 +35,7 @@ import {
   normalizeFirmSettings,
   normalizeInvoice,
   normalizeLead,
+  normalizePortalMessage,
   normalizeProject,
   normalizeTask,
   normalizeTicket,
@@ -150,6 +153,9 @@ function mapProject(
     clientCanComment: row.client_can_comment !== false,
     portalLocale: row.portal_locale === "sl" ? "sl" : "en",
     archivedAt: (row.archived_at as string) ?? null,
+    portalClientLastSeenAt: (row.portal_client_last_seen_at as string) ?? null,
+    portalStudioLastReadAt: (row.portal_studio_last_read_at as string) ?? null,
+    portalClientLastReadAt: (row.portal_client_last_read_at as string) ?? null,
   };
 }
 
@@ -174,6 +180,16 @@ function mapClient(row: Record<string, unknown>): Client {
       row.payment_terms_days == null
         ? null
         : Number(row.payment_terms_days),
+    authUserId: (row.auth_user_id as string) ?? null,
+    portalEmail: (row.portal_email as string) ?? null,
+    onboardingCompletedAt: (row.onboarding_completed_at as string) ?? null,
+    portalLocale: row.portal_locale === "sl" ? "sl" : "en",
+    billingKind:
+      row.billing_kind === "person" || row.billing_kind === "company"
+        ? row.billing_kind
+        : null,
+    firstName: (row.first_name as string) ?? "",
+    lastName: (row.last_name as string) ?? "",
   });
 }
 
@@ -262,6 +278,35 @@ function mapPortalComment(row: Record<string, unknown>): PortalComment {
     targetId: row.target_id as string,
     body: row.body as string,
     authorKind: row.author_kind as PortalComment["authorKind"],
+    authorName: (row.author_name as string) ?? "",
+    createdAt: row.created_at as string,
+  };
+}
+
+function mapPortalMessage(row: Record<string, unknown>): PortalMessage {
+  return normalizePortalMessage({
+    id: row.id as string,
+    projectId: row.project_id as string,
+    parentId: (row.parent_id as string) ?? null,
+    body: (row.body as string) ?? "",
+    authorKind: row.author_kind as PortalMessage["authorKind"],
+    authorId: (row.author_id as string) ?? null,
+    authorName: (row.author_name as string) ?? "",
+    createdAt: row.created_at as string,
+    editedAt: (row.edited_at as string) ?? null,
+    deletedAt: (row.deleted_at as string) ?? null,
+    attachmentId: (row.attachment_id as string) ?? null,
+  });
+}
+
+function mapPortalMessageReaction(
+  row: Record<string, unknown>
+): PortalMessageReaction {
+  return {
+    id: row.id as string,
+    messageId: row.message_id as string,
+    emoji: row.emoji as string,
+    authorKind: row.author_kind as PortalMessageReaction["authorKind"],
     authorName: (row.author_name as string) ?? "",
     createdAt: row.created_at as string,
   };
@@ -413,6 +458,9 @@ export async function saveProjects(projects: Project[]) {
       client_can_comment: p.clientCanComment,
       portal_locale: p.portalLocale === "sl" ? "sl" : "en",
       archived_at: p.archivedAt ?? null,
+      portal_client_last_seen_at: p.portalClientLastSeenAt ?? null,
+      portal_studio_last_read_at: p.portalStudioLastReadAt ?? null,
+      portal_client_last_read_at: p.portalClientLastReadAt ?? null,
     });
     throwIf(error);
 
@@ -477,6 +525,93 @@ export async function saveTasks(tasks: Task[]) {
         reminder: t.reminder,
         client_visible: t.clientVisible,
         waiting_on_client: t.waitingOnClient,
+      }))
+    );
+    throwIf(error);
+  }
+}
+
+export async function getPortalMessages() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("portal_messages")
+    .select("*")
+    .order("created_at", { ascending: true });
+  throwIf(error);
+  return (data ?? []).map(mapPortalMessage);
+}
+
+export async function savePortalMessages(items: PortalMessage[]) {
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("portal_messages")
+    .select("id");
+  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
+  const nextIds = new Set(items.map((m) => m.id));
+  const toDelete = [...existingIds].filter((id) => !nextIds.has(id));
+  if (toDelete.length) {
+    const { error } = await supabase
+      .from("portal_messages")
+      .delete()
+      .in("id", toDelete);
+    throwIf(error);
+  }
+  if (items.length) {
+    const { error } = await supabase.from("portal_messages").upsert(
+      items.map((m) => ({
+        id: m.id,
+        project_id: m.projectId,
+        parent_id: m.parentId,
+        body: m.body,
+        author_kind: m.authorKind,
+        author_id: m.authorId,
+        author_name: m.authorName,
+        created_at: m.createdAt,
+        edited_at: m.editedAt,
+        deleted_at: m.deletedAt,
+        attachment_id: m.attachmentId,
+      }))
+    );
+    throwIf(error);
+  }
+}
+
+export async function getPortalMessageReactions() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("portal_message_reactions")
+    .select("*")
+    .order("created_at", { ascending: true });
+  throwIf(error);
+  return (data ?? []).map(mapPortalMessageReaction);
+}
+
+export async function savePortalMessageReactions(
+  items: PortalMessageReaction[]
+) {
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("portal_message_reactions")
+    .select("id");
+  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
+  const nextIds = new Set(items.map((r) => r.id));
+  const toDelete = [...existingIds].filter((id) => !nextIds.has(id));
+  if (toDelete.length) {
+    const { error } = await supabase
+      .from("portal_message_reactions")
+      .delete()
+      .in("id", toDelete);
+    throwIf(error);
+  }
+  if (items.length) {
+    const { error } = await supabase.from("portal_message_reactions").upsert(
+      items.map((r) => ({
+        id: r.id,
+        message_id: r.messageId,
+        emoji: r.emoji,
+        author_kind: r.authorKind,
+        author_name: r.authorName,
+        created_at: r.createdAt,
       }))
     );
     throwIf(error);
@@ -982,6 +1117,13 @@ export async function saveClients(clients: Client[]) {
         vat_id: c.vatId,
         registration_number: c.registrationNumber,
         payment_terms_days: c.paymentTermsDays,
+        auth_user_id: c.authUserId,
+        portal_email: c.portalEmail,
+        onboarding_completed_at: c.onboardingCompletedAt,
+        portal_locale: c.portalLocale === "sl" ? "sl" : "en",
+        billing_kind: c.billingKind,
+        first_name: c.firstName,
+        last_name: c.lastName,
       }))
     );
     throwIf(error);

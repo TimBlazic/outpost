@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import {
   ArrowUpRight,
   TrendingUp,
@@ -28,6 +30,10 @@ import { RevenueAreaChart } from "@/components/charts";
 import { FollowUpRowActions } from "@/components/follow-up-row-actions";
 import { isArchived } from "@/lib/data";
 import {
+  requireClientSession,
+  tryClientPortalSession,
+} from "@/lib/client-accounts/session";
+import {
   dashboardRangeLabels,
   isDateInRange,
   leadActivityDate,
@@ -48,6 +54,7 @@ import {
   getTasks,
 } from "@/lib/store";
 import { eur, fmtDate, dueState, leadStatusColor } from "@/lib/format";
+import { getHostRole, getRequestHostname } from "@/lib/hosts";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +71,27 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
+  const reqHeaders = await headers();
+  const role = getHostRole(getRequestHostname(reqHeaders.get("host")));
+  if (role === "client") {
+    const { client } = await requireClientSession();
+    if (!client.onboardingCompletedAt) {
+      redirect("/onboarding");
+    }
+    redirect("/projects");
+  }
+
+  // localhost / unified: linked client accounts use the portal, not studio home
+  if (role === "unified") {
+    const session = await tryClientPortalSession();
+    if (session) {
+      if (!session.client.onboardingCompletedAt) {
+        redirect("/onboarding");
+      }
+      redirect("/projects");
+    }
+  }
+
   const { range: rangeParam } = await searchParams;
   const range = parseDashboardRange(rangeParam);
   const bounds = rangeBounds(range);

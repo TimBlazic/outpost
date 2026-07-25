@@ -25,12 +25,10 @@ import type {
 } from "@/lib/data";
 import { isSupabaseEnabled } from "@/lib/supabase/env";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generatePortalToken, hashPin, verifyPin } from "./pin";
-import {
-  assertPortalAccess,
-  clearPortalSession,
-  setPortalSession,
-} from "./session";
+import { assertClientProjectAccess } from "@/lib/client-accounts/access";
+import { notifyPortalChatChanged } from "@/lib/realtime/notify-chat";
+import { generatePortalToken, hashPin } from "./pin";
+import { assertPortalAccess } from "./session";
 import {
   setPortalThemeCookie,
   type PortalTheme,
@@ -48,6 +46,7 @@ import {
   portalGetTicketCommentReactions,
   portalSaveTicketComment,
   portalSaveTicketCommentReaction,
+  portalGetMessages,
   portalDeleteTicketCommentReaction,
 } from "./repo";
 
@@ -61,6 +60,10 @@ function nowIso() {
 
 function revalidatePortal(token: string, projectId: string) {
   revalidatePath(`/portal/${token}`);
+  revalidateProject(projectId);
+}
+
+function revalidateProject(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects");
   revalidatePath("/tasks");
@@ -223,23 +226,6 @@ export async function postStudioPortalComment(
 }
 
 // ---- Client portal --------------------------------------------------------
-
-export async function unlockPortal(token: string, pin: string) {
-  const project = await portalGetProjectByToken(token);
-  if (!project || !project.portalEnabled) {
-    throw new Error("Portal not found");
-  }
-  if (!verifyPin(pin, project.portalPinHash)) {
-    throw new Error("Incorrect PIN");
-  }
-  await setPortalSession(token);
-  revalidatePath(`/portal/${token}`);
-}
-
-export async function lockPortal(token: string) {
-  await clearPortalSession();
-  revalidatePath(`/portal/${token}`);
-}
 
 export async function setPortalTheme(theme: PortalTheme) {
   if (theme !== "light" && theme !== "dark") {
@@ -512,7 +498,8 @@ export async function clientUploadPortalFile(formData: FormData) {
   const parentType = String(formData.get("parentType") ?? "") as
     | "project"
     | "ticket"
-    | "ticket_comment";
+    | "ticket_comment"
+    | "portal_message";
   const parentId = String(formData.get("parentId") ?? "");
   const label = String(formData.get("label") ?? "");
   const file = formData.get("file");
@@ -522,7 +509,9 @@ export async function clientUploadPortalFile(formData: FormData) {
   if (!project) throw new Error("Portal not found");
   if (!(file instanceof File) || !file.size) throw new Error("No file");
   if (
-    !["project", "ticket", "ticket_comment"].includes(parentType) ||
+    !["project", "ticket", "ticket_comment", "portal_message"].includes(
+      parentType
+    ) ||
     !parentId
   ) {
     throw new Error("Invalid parent");
@@ -536,6 +525,11 @@ export async function clientUploadPortalFile(formData: FormData) {
     const comments = await portalGetTicketComments(tickets.map((t) => t.id));
     if (!comments.some((c) => c.id === parentId)) {
       throw new Error("Comment not found");
+    }
+  } else if (parentType === "portal_message") {
+    const messages = await portalGetMessages(project.id);
+    if (!messages.some((m) => m.id === parentId && !m.deletedAt)) {
+      throw new Error("Message not found");
     }
   } else {
     if (!project.clientCanUploadFiles) {
@@ -590,4 +584,279 @@ export async function clientUploadPortalFile(formData: FormData) {
   };
   await portalSaveAttachment(attachment);
   revalidatePortal(token, project.id);
+  if (parentType === "portal_message") {
+    void notifyPortalChatChanged(project.id);
+  }
+}
+
+// ---- Session-based client actions (client-account auth) -------------------
+
+export async function sessionPostClientPortalUpdate(
+  projectId: string,
+  body: string
+) {
+  const { client, project } = await assertClientProjectAccess(projectId);
+  const text = body.trim();
+  if (!text) throw new Error("Message cannot be empty");
+
+  const update: PortalUpdate = {
+    id: uid("pu"),
+    projectId: project.id,
+    body: text,
+    authorKind: "client",
+    authorName: client.name || "Client",
+    createdAt: nowIso(),
+  };
+  await portalSaveUpdate(update);
+  revalidateProject(project.id);
+  return update.id;
+}
+
+export async function sessionPostClientPortalComment(
+  projectId: string,
+  input: {
+    targetType: "update" | "task";
+    targetId: string;
+    body: string;
+  }
+) {
+  const { client, project } = await assertClientProjectAccess(projectId);
+  const text = input.body.trim();
+  if (!text) throw new Error("Comment cannot be empty");
+
+  const comment: PortalComment = {
+    id: uid("pc"),
+    projectId: project.id,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    body: text,
+    authorKind: "client",
+    authorName: client.name || "Client",
+    createdAt: nowIso(),
+  };
+  await portalSaveComment(comment);
+  revalidateProject(project.id);
+}
+
+export async function sessionClientCompleteWaitingTask(
+  projectId: string,
+  taskId: string
+) {
+  const { project } = await assertClientProjectAccess(projectId);
+  const tasks = await portalGetClientTasks(project.id);
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task || !task.waitingOnClient) {
+    throw new Error("Task not available");
+  }
+  const next: Task = { ...task, status: "Done", waitingOnClient: false };
+  await portalUpdateTask(next);
+  revalidateProject(project.id);
+}
+
+export async function sessionClientCreateTicket(
+  projectId: string,
+  input: {
+    title: string;
+    description: string;
+    dueAt?: string | null;
+  }
+) {
+  const { client, project } = await assertClientProjectAccess(projectId);
+  if (!project.clientCanCreateTickets) {
+    throw new Error("Creating tickets is disabled for this portal");
+  }
+  const title = input.title.trim();
+  if (!title) throw new Error("Title is required");
+
+  const ticket: Ticket = {
+    id: uid("tk"),
+    projectId: project.id,
+    title,
+    description: input.description ?? "",
+    status: "Todo",
+    createdAt: nowIso(),
+    dueAt: input.dueAt?.trim() || null,
+    assigneeKind: "studio",
+    assigneeId: project.ownerId,
+    createdByKind: "client",
+    createdByName: client.name || "Client",
+  };
+  await portalSaveTicket(ticket);
+  revalidateProject(project.id);
+  return ticket.id;
+}
+
+export async function sessionClientCreateTicketComment(
+  projectId: string,
+  ticketId: string,
+  input: { body: string; parentId?: string | null }
+) {
+  const { client, project } = await assertClientProjectAccess(projectId);
+  if (!project.clientCanComment) {
+    throw new Error("Comments are disabled for this portal");
+  }
+
+  const tickets = await portalGetTickets(project.id);
+  const ticket = tickets.find((t) => t.id === ticketId);
+  if (!ticket) throw new Error("Ticket not found");
+
+  const body = input.body.trim();
+  if (!body) throw new Error("Comment is empty");
+
+  if (input.parentId) {
+    const existing = await portalGetTicketComments([ticketId]);
+    const parent = existing.find((c) => c.id === input.parentId);
+    if (!parent) throw new Error("Invalid reply parent");
+  }
+
+  const comment: TicketComment = {
+    id: uid("tc"),
+    ticketId,
+    parentId: input.parentId ?? null,
+    body,
+    authorKind: "client",
+    authorName: client.name || "Client",
+    authorId: null,
+    createdAt: nowIso(),
+    editedAt: null,
+  };
+  await portalSaveTicketComment(comment);
+  revalidateProject(project.id);
+  return comment.id;
+}
+
+export async function sessionClientToggleTicketCommentReaction(
+  projectId: string,
+  commentId: string,
+  emoji: string
+) {
+  const { client, project } = await assertClientProjectAccess(projectId);
+  if (!project.clientCanComment) {
+    throw new Error("Comments are disabled for this portal");
+  }
+
+  const tickets = await portalGetTickets(project.id);
+  const ticketIds = tickets.map((t) => t.id);
+  const comments = await portalGetTicketComments(ticketIds);
+  const comment = comments.find((c) => c.id === commentId);
+  if (!comment) throw new Error("Comment not found");
+
+  const authorName = client.name || "Client";
+  const reactions = await portalGetTicketCommentReactions([commentId]);
+  const existing = reactions.find(
+    (r) =>
+      r.commentId === commentId &&
+      r.emoji === emoji &&
+      r.authorKind === "client" &&
+      r.authorName === authorName
+  );
+
+  if (existing) {
+    await portalDeleteTicketCommentReaction(existing.id);
+  } else {
+    const reaction: TicketCommentReaction = {
+      id: uid("tcr"),
+      commentId,
+      emoji,
+      authorKind: "client",
+      authorName,
+      createdAt: nowIso(),
+    };
+    await portalSaveTicketCommentReaction(reaction);
+  }
+  revalidateProject(project.id);
+}
+
+export async function sessionClientUploadPortalFile(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const parentType = String(formData.get("parentType") ?? "") as
+    | "project"
+    | "ticket"
+    | "ticket_comment"
+    | "portal_message";
+  const parentId = String(formData.get("parentId") ?? "");
+  const label = String(formData.get("label") ?? "");
+  const file = formData.get("file");
+
+  const { project } = await assertClientProjectAccess(projectId);
+  if (!(file instanceof File) || !file.size) throw new Error("No file");
+  if (
+    !["project", "ticket", "ticket_comment", "portal_message"].includes(
+      parentType
+    ) ||
+    !parentId
+  ) {
+    throw new Error("Invalid parent");
+  }
+
+  if (parentType === "ticket_comment") {
+    if (!project.clientCanComment) {
+      throw new Error("Comments are disabled for this portal");
+    }
+    const tickets = await portalGetTickets(project.id);
+    const comments = await portalGetTicketComments(tickets.map((t) => t.id));
+    if (!comments.some((c) => c.id === parentId)) {
+      throw new Error("Comment not found");
+    }
+  } else if (parentType === "portal_message") {
+    const messages = await portalGetMessages(project.id);
+    if (!messages.some((m) => m.id === parentId && !m.deletedAt)) {
+      throw new Error("Message not found");
+    }
+  } else {
+    if (!project.clientCanUploadFiles) {
+      throw new Error("Uploads are disabled for this portal");
+    }
+    if (parentType === "project" && parentId !== project.id) {
+      throw new Error("Invalid project");
+    }
+  }
+
+  const id = uid("f");
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  let url: string | null = null;
+  let storagePath: string | null = null;
+
+  if (isSupabaseEnabled()) {
+    const storagePathKey = `${parentType}/${parentId}/${id}-${safeName}`;
+    const supabase = createAdminClient();
+    const { error } = await supabase.storage
+      .from("attachments")
+      .upload(storagePathKey, buffer, {
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+    if (error) throw new Error(error.message);
+    storagePath = storagePathKey;
+    const { data: signed } = await supabase.storage
+      .from("attachments")
+      .createSignedUrl(storagePathKey, 60 * 60 * 24 * 7);
+    url = signed?.signedUrl ?? null;
+  } else {
+    const rel = path.join(parentType, parentId, `${id}-${safeName}`);
+    const dest = path.join(process.cwd(), "data", "uploads", rel);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, buffer);
+    url = `/api/files/${rel.split(path.sep).join("/")}`;
+    storagePath = `local:${rel.split(path.sep).join("/")}`;
+  }
+
+  const attachment: Attachment = {
+    id,
+    parentType,
+    parentId,
+    label: label || file.name,
+    kind: "file",
+    url,
+    storagePath,
+    mime: file.type || null,
+    size: file.size,
+  };
+  await portalSaveAttachment(attachment);
+  revalidateProject(project.id);
+  if (parentType === "portal_message") {
+    void notifyPortalChatChanged(project.id);
+  }
 }

@@ -9,8 +9,10 @@ import {
   Building2,
   CheckSquare,
   FolderKanban,
+  MessageSquare,
   Receipt,
   BookOpen,
+  Images,
   Settings,
   PanelLeftClose,
   PanelLeft,
@@ -18,6 +20,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import type { Member } from "@/lib/data";
+import { UNREAD_POLL_MS } from "@/lib/portal/chat-sync-shared";
 import { UserAvatar } from "@/components/user-avatar";
 import {
   DropdownMenu,
@@ -29,6 +32,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/lib/auth/actions";
 import { CommandPalette } from "@/components/command-palette";
+import { StudioThemeToggle } from "@/components/studio-theme-toggle";
+import type { StudioTheme } from "@/lib/theme/studio";
 
 const SIDEBAR_KEY = "outpost.sidebarCollapsed";
 
@@ -38,8 +43,10 @@ const nav = [
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/docs", label: "Docs", icon: BookOpen },
+  { href: "/moodboard", label: "Moodboard", icon: Images },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -47,12 +54,42 @@ function SidebarNav({
   user,
   collapsed,
   onToggle,
+  studioTheme,
 }: {
   user: Member;
   collapsed: boolean;
   onToggle: () => void;
+  studioTheme: StudioTheme;
 }) {
   const pathname = usePathname();
+  const [messagesUnread, setMessagesUnread] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const res = await fetch("/api/chat/unread", { cache: "no-store" });
+        if (!res.ok || !alive) return;
+        const data = (await res.json()) as { total?: number };
+        if (alive) setMessagesUnread(data.total ?? 0);
+      } catch {
+        /* ignore */
+      }
+    };
+    void load();
+    const id = window.setInterval(load, UNREAD_POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [pathname]);
+
   return (
     <aside
       className={cn(
@@ -101,13 +138,20 @@ function SidebarNav({
             item.href === "/"
               ? pathname === "/"
               : pathname.startsWith(item.href);
+          const unread = item.href === "/messages" ? messagesUnread : 0;
           return (
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.label : undefined}
+              title={
+                collapsed
+                  ? unread > 0
+                    ? `${item.label} (${unread})`
+                    : item.label
+                  : undefined
+              }
               className={cn(
-                "flex items-center rounded-md text-sm transition-colors",
+                "relative flex items-center rounded-md text-sm transition-colors",
                 collapsed
                   ? "size-9 justify-center"
                   : "gap-3 px-3 py-2",
@@ -117,7 +161,18 @@ function SidebarNav({
               )}
             >
               <item.icon className="size-4 shrink-0 opacity-70" />
-              {!collapsed ? <span>{item.label}</span> : null}
+              {!collapsed ? (
+                <>
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                  {unread > 0 ? (
+                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground tabular-nums">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  ) : null}
+                </>
+              ) : unread > 0 ? (
+                <span className="absolute top-1 right-1 size-2 rounded-full bg-primary" />
+              ) : null}
             </Link>
           );
         })}
@@ -125,46 +180,72 @@ function SidebarNav({
       <div
         className={cn(
           "border-t border-sidebar-border",
-          collapsed ? "p-1.5" : "p-3"
+          collapsed ? "flex flex-col items-center gap-1 p-1.5" : "p-3"
         )}
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                "flex w-full items-center rounded-md text-left hover:bg-sidebar-accent/60",
-                collapsed
-                  ? "size-9 justify-center p-0"
-                  : "gap-3 px-2 py-1.5"
-              )}
-              title={collapsed ? user.name : undefined}
-            >
-              <UserAvatar member={user} />
-              {!collapsed ? (
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{user.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {user.role}
-                  </p>
-                </div>
-              ) : null}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuLabel>Account</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/settings">Profile & settings</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <form action={logout} className="w-full">
-                <button type="submit" className="w-full text-left">
-                  Sign out
+        {collapsed ? (
+          <>
+            <StudioThemeToggle
+              initialTheme={studioTheme}
+              collapsed
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex size-9 items-center justify-center rounded-md hover:bg-sidebar-accent/60"
+                  title={user.name}
+                >
+                  <UserAvatar member={user} />
                 </button>
-              </form>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-44">
+                <DropdownMenuLabel>Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">Profile & settings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <form action={logout} className="w-full">
+                    <button type="submit" className="w-full text-left">
+                      Sign out
+                    </button>
+                  </form>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : (
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent/60">
+                  <UserAvatar member={user} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{user.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {user.role}
+                    </p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-44">
+                <DropdownMenuLabel>Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">Profile & settings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <form action={logout} className="w-full">
+                    <button type="submit" className="w-full text-left">
+                      Sign out
+                    </button>
+                  </form>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <StudioThemeToggle initialTheme={studioTheme} />
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -208,9 +289,14 @@ function KeyboardShortcuts() {
 export function AppShell({
   children,
   user,
+  hideChrome = false,
+  studioTheme = "light",
 }: {
   children: React.ReactNode;
   user: Member;
+  /** Client-account sessions (even if profile.role isn't Client yet). */
+  hideChrome?: boolean;
+  studioTheme?: StudioTheme;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -235,7 +321,14 @@ export function AppShell({
     });
   }
 
-  if (pathname === "/login" || pathname.startsWith("/portal")) {
+  if (
+    hideChrome ||
+    pathname === "/login" ||
+    pathname === "/client-login" ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/portal") ||
+    user.role === "Client"
+  ) {
     return <>{children}</>;
   }
 
@@ -245,11 +338,21 @@ export function AppShell({
         user={user}
         collapsed={collapsed}
         onToggle={toggleSidebar}
+        studioTheme={studioTheme}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <KeyboardShortcuts />
         <CommandPalette />
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        <main
+          className={cn(
+            "flex min-h-0 flex-1 flex-col",
+            pathname.startsWith("/messages")
+              ? "overflow-hidden"
+              : "overflow-y-auto"
+          )}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

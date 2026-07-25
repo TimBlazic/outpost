@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import type { Client } from "@/lib/data";
 import { createClient, updateClient } from "@/lib/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,16 @@ export function ClientForm({ client }: { client?: Client }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const editing = Boolean(client);
+  const portalLinked = Boolean(client?.authUserId);
+  const [createPortalAccount, setCreatePortalAccount] = useState(false);
+  const [contactEmail, setContactEmail] = useState(client?.email ?? "");
+  const [portalEmail, setPortalEmail] = useState(
+    client?.portalEmail || client?.email || ""
+  );
+  const [portalLocale, setPortalLocale] = useState<"en" | "sl">(
+    client?.portalLocale === "sl" ? "sl" : "en"
+  );
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const back = client ? `/clients/${client.id}` : "/clients";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -50,7 +61,7 @@ export function ClientForm({ client }: { client?: Client }) {
     const termsRaw = val("paymentTermsDays").trim();
     const input = {
       name: val("name").trim(),
-      email: val("email").trim(),
+      email: contactEmail.trim(),
       phone: val("phone").trim(),
       company: val("company").trim() || val("name").trim(),
       website: val("website").trim(),
@@ -62,17 +73,27 @@ export function ClientForm({ client }: { client?: Client }) {
       vatId: val("vatId").trim(),
       registrationNumber: val("registrationNumber").trim(),
       paymentTermsDays: termsRaw === "" ? null : Number(termsRaw) || null,
+      createPortalAccount,
+      portalEmail: portalEmail.trim(),
+      portalLocale,
     };
 
+    setSubmitError(null);
     startTransition(async () => {
-      if (client) {
-        await updateClient(client.id, input);
-        router.push(`/clients/${client.id}`);
-      } else {
-        const id = await createClient(input);
-        router.push(`/clients/${id}`);
+      try {
+        if (client) {
+          await updateClient(client.id, input);
+          router.push(`/clients/${client.id}`);
+        } else {
+          const id = await createClient(input);
+          router.push(`/clients/${id}`);
+        }
+        router.refresh();
+      } catch (err) {
+        setSubmitError(
+          err instanceof Error ? err.message : "Failed to save client."
+        );
       }
-      router.refresh();
     });
   }
 
@@ -141,9 +162,79 @@ export function ClientForm({ client }: { client?: Client }) {
               id="email"
               name="email"
               type="email"
-              defaultValue={client?.email}
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
               placeholder="hello@acme.example"
             />
+            {portalLinked ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Portal account linked.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id="createPortalAccount"
+                    checked={createPortalAccount}
+                    disabled={pending}
+                    onCheckedChange={(checked) => {
+                      const next = Boolean(checked);
+                      setCreatePortalAccount(next);
+                      if (
+                        next &&
+                        !editing &&
+                        !portalEmail.trim() &&
+                        contactEmail.trim()
+                      ) {
+                        setPortalEmail(contactEmail.trim());
+                      }
+                    }}
+                  />
+                  Create portal account
+                </label>
+                {createPortalAccount ? (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="portalEmail">Portal email</Label>
+                      <Input
+                        id="portalEmail"
+                        name="portalEmail"
+                        type="email"
+                        value={portalEmail}
+                        onChange={(e) => setPortalEmail(e.target.value)}
+                        placeholder="portal@acme.example"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Portal language</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={portalLocale === "sl" ? "default" : "outline"}
+                          disabled={pending}
+                          onClick={() => setPortalLocale("sl")}
+                        >
+                          Slovenščina
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={portalLocale === "en" ? "default" : "outline"}
+                          disabled={pending}
+                          onClick={() => setPortalLocale("en")}
+                        >
+                          English
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Onboarding and portal UI for this client.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </Field>
           <Field label="Phone" htmlFor="phone">
             <Input
@@ -220,6 +311,7 @@ export function ClientForm({ client }: { client?: Client }) {
           </Field>
         </CardContent>
       </Card>
+      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
     </form>
   );
 }

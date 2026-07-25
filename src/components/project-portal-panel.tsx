@@ -1,36 +1,32 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { Copy, ExternalLink } from "lucide-react";
 
 import type { PortalComment, PortalUpdate, Project, Task } from "@/lib/data";
-import {
-  disableProjectPortal,
-  enableProjectPortal,
-  rotatePortalToken,
-  setPortalPin,
-  setTaskClientFlags,
-} from "@/lib/portal/actions";
+import { setTaskClientFlags } from "@/lib/portal/actions";
 import { portalUrlForToken } from "@/lib/portal/url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export function ProjectPortalPanel({
   project,
   tasks,
+  clientPortalStatus,
+  clientPortalEmail,
 }: {
   project: Project;
   tasks: Task[];
   updates?: PortalUpdate[];
   comments?: PortalComment[];
   compact?: boolean;
+  clientPortalStatus?: "no-account" | "invited" | "active" | null;
+  clientPortalEmail?: string | null;
 }) {
   const [pending, startTransition] = useTransition();
-  const [pin, setPin] = useState("");
   const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const portalUrl = useMemo(
     () => portalUrlForToken(project.portalToken),
@@ -53,111 +49,63 @@ export function ProjectPortalPanel({
             {project.portalEnabled ? "On" : "Off"}
           </span>
         </div>
-
-        {!project.portalEnabled ? (
-          <div className="space-y-3">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Client sign-in now uses magic-link accounts (no project PIN).
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Client account status:{" "}
+            <span className="font-medium text-foreground">
+              {clientPortalStatus === "active"
+                ? "Active"
+                : clientPortalStatus === "invited"
+                  ? "Invited"
+                  : clientPortalStatus === "no-account"
+                    ? "No account"
+                    : "Unknown"}
+            </span>
+            {clientPortalEmail ? ` · ${clientPortalEmail}` : ""}
+          </p>
+          {project.clientId ? (
             <p className="text-sm text-muted-foreground">
-              Share a link and PIN so the client can see progress and approve
-              work.
+              Manage account status on the{" "}
+              <Link
+                href={`/clients/${project.clientId}`}
+                className="font-medium text-foreground hover:underline"
+              >
+                client profile
+              </Link>
+              .
             </p>
-            <div className="flex flex-wrap items-end gap-2">
-              <div>
-                <Label className="mb-1.5 text-xs">PIN</Label>
+          ) : (
+            <p className="text-sm text-amber-600">
+              Link this project to a client to manage account access.
+            </p>
+          )}
+          {project.portalEnabled && portalUrl ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Legacy link support (temporary)
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
                 <Input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="Min. 4 chars"
-                  className="h-9 w-40"
+                  readOnly
+                  value={portalUrl}
+                  className="h-9 min-w-0 flex-1 font-mono text-xs"
                 />
+                <Button variant="outline" size="sm" onClick={copyLink}>
+                  <Copy className="size-3.5" />
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={portalUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                </Button>
               </div>
-              <Button
-                size="sm"
-                disabled={pending || pin.trim().length < 4}
-                onClick={() => {
-                  setError(null);
-                  startTransition(async () => {
-                    try {
-                      await enableProjectPortal(project.id, pin);
-                      setPin("");
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : "Failed");
-                    }
-                  });
-                }}
-              >
-                Enable
-              </Button>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                readOnly
-                value={portalUrl}
-                className="h-9 min-w-0 flex-1 font-mono text-xs"
-              />
-              <Button variant="outline" size="sm" onClick={copyLink}>
-                <Copy className="size-3.5" />
-                {copied ? "Copied" : "Copy"}
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <a href={portalUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink className="size-3.5" />
-                </a>
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <div>
-                <Label className="mb-1.5 text-xs">Reset PIN</Label>
-                <Input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  className="h-9 w-36"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pending || pin.trim().length < 4}
-                onClick={() =>
-                  startTransition(async () => {
-                    await setPortalPin(project.id, pin);
-                    setPin("");
-                  })
-                }
-              >
-                Save PIN
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    await rotatePortalToken(project.id);
-                  })
-                }
-              >
-                Rotate link
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(() => disableProjectPortal(project.id))
-                }
-              >
-                Disable
-              </Button>
-            </div>
-          </div>
-        )}
-        {error && <p className="text-sm text-rose-600">{error}</p>}
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -175,6 +123,7 @@ export function ProjectPortalPanel({
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Checkbox
                     checked={t.clientVisible}
+                    disabled={pending}
                     onCheckedChange={(v) =>
                       startTransition(() =>
                         setTaskClientFlags(t.id, {
@@ -188,7 +137,7 @@ export function ProjectPortalPanel({
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Checkbox
                     checked={t.waitingOnClient}
-                    disabled={!t.clientVisible}
+                    disabled={pending || !t.clientVisible}
                     onCheckedChange={(v) =>
                       startTransition(() =>
                         setTaskClientFlags(t.id, {

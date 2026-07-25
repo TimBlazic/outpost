@@ -29,6 +29,7 @@ import {
   updateTicket,
 } from "@/lib/actions";
 import { fmtDate, fmtDateLong } from "@/lib/format";
+import { mentionHandle } from "@/lib/mentions";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@/components/markdown";
 import { AttachmentsPanel } from "@/components/attachments-panel";
@@ -436,7 +437,7 @@ export function TicketDetail({
               mentionExtras={[
                 {
                   label: clientName,
-                  insert: `@${clientName.replace(/\s+/g, "")}`,
+                  insert: mentionHandle(clientName),
                 },
                 { label: "Client", insert: "@Client" },
               ]}

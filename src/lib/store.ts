@@ -44,7 +44,10 @@ import {
   type FileLink,
   type FirmSettings,
   type Invoice,
+  type PortalMessage,
+  type PortalMessageReaction,
   type PortalUpdate,
+  normalizePortalMessage,
   type PortalComment,
   type ProjectPhase,
   type PortalApproval,
@@ -143,6 +146,12 @@ const fileStore = {
   getPortalUpdates: () =>
     load<PortalUpdate[]>("portal-updates", seedPortalUpdates),
   savePortalUpdates: (d: PortalUpdate[]) => save("portal-updates", d),
+  getPortalMessages: () => load<PortalMessage[]>("portal-messages", []),
+  savePortalMessages: (d: PortalMessage[]) => save("portal-messages", d),
+  getPortalMessageReactions: () =>
+    load<PortalMessageReaction[]>("portal-message-reactions", []),
+  savePortalMessageReactions: (d: PortalMessageReaction[]) =>
+    save("portal-message-reactions", d),
   getPortalComments: () =>
     load<PortalComment[]>("portal-comments", seedPortalComments),
   savePortalComments: (d: PortalComment[]) => save("portal-comments", d),
@@ -251,6 +260,19 @@ export async function getPortalUpdates() {
 export async function savePortalUpdates(d: PortalUpdate[]) {
   return (await backend()).savePortalUpdates(d);
 }
+export async function getPortalMessages() {
+  const rows = await (await backend()).getPortalMessages();
+  return rows.map(normalizePortalMessage);
+}
+export async function savePortalMessages(d: PortalMessage[]) {
+  return (await backend()).savePortalMessages(d.map(normalizePortalMessage));
+}
+export async function getPortalMessageReactions() {
+  return (await backend()).getPortalMessageReactions();
+}
+export async function savePortalMessageReactions(d: PortalMessageReaction[]) {
+  return (await backend()).savePortalMessageReactions(d);
+}
 export async function getPortalComments() {
   return (await backend()).getPortalComments();
 }
@@ -303,6 +325,30 @@ export async function getPortalUpdatesForProject(projectId: string) {
   return (await getPortalUpdates())
     .filter((u) => u.projectId === projectId)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export async function getPortalMessagesForProject(projectId: string) {
+  return (await getPortalMessages())
+    .filter((m) => m.projectId === projectId)
+    .sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
+}
+
+export async function getPortalMessageReactionsForProject(projectId: string) {
+  const ids = new Set(
+    (await getPortalMessagesForProject(projectId)).map((m) => m.id)
+  );
+  return (await getPortalMessageReactions()).filter((r) =>
+    ids.has(r.messageId)
+  );
+}
+
+export async function getPortalMessageFilesForProject(projectId: string) {
+  const ids = new Set(
+    (await getPortalMessagesForProject(projectId)).map((m) => m.id)
+  );
+  return (await getAttachments()).filter(
+    (a) => a.parentType === "portal_message" && ids.has(a.parentId)
+  );
 }
 
 export async function getPortalCommentsForProject(projectId: string) {

@@ -30,6 +30,7 @@ import {
   saveDocs,
   saveFirmSettings,
   syncLeadNoteCount,
+  getPortalMessages,
 } from "./store";
 import type {
   Lead,
@@ -58,10 +59,12 @@ import type {
   TicketComment,
   TicketCommentReaction,
 } from "./data";
-import { isArchived, memberById, members as seedMembers } from "./data";
+import { isArchived, memberById, members as seedMembers, normalizeClient } from "./data";
 import { getCurrentProfile, getCurrentUserId } from "./auth/session";
+import { generatePortalToken } from "./portal/pin";
 import { isSupabaseEnabled } from "./supabase/env";
 import { createClient as createSupabaseServerClient } from "./supabase/server";
+import { inviteClientPortalAccount } from "./client-accounts/invite";
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -524,6 +527,19 @@ async function revalidateAttachmentParent(
       revalidatePath(`/projects/${ticket.projectId}/tickets/${parentId}`);
     }
   }
+  if (parentType === "portal_message") {
+    const messages = await getPortalMessages();
+    const message = messages.find((m) => m.id === parentId);
+    revalidatePath("/messages");
+    if (message) {
+      revalidatePath(`/messages/${message.projectId}`);
+      revalidatePath(`/projects/${message.projectId}`);
+      const { notifyPortalChatChanged } = await import(
+        "@/lib/realtime/notify-chat"
+      );
+      void notifyPortalChatChanged(message.projectId);
+    }
+  }
   if (parentType === "ticket_comment") {
     const comments = await getTicketComments();
     const comment = comments.find((c) => c.id === parentId);
@@ -580,6 +596,7 @@ export async function uploadAttachment(formData: FormData) {
       "ticket",
       "ticket_comment",
       "task",
+      "portal_message",
     ].includes(parentType) ||
     !parentId
   ) {
@@ -766,7 +783,7 @@ async function ensureClientForProject(input: {
     lead = (await getLeads()).find((l) => l.id === input.leadId);
   }
 
-  const client: Client = {
+  const client: Client = normalizeClient({
     id: uid("c"),
     name: name || lead?.company || "Client",
     email: lead?.email ?? "",
@@ -783,7 +800,14 @@ async function ensureClientForProject(input: {
     vatId: "",
     registrationNumber: "",
     paymentTermsDays: null,
-  };
+    authUserId: null,
+    portalEmail: null,
+    onboardingCompletedAt: null,
+    portalLocale: "en",
+    billingKind: null,
+    firstName: "",
+    lastName: "",
+  });
   await saveClients([client, ...clients]);
   return client;
 }
@@ -809,8 +833,8 @@ export async function createProject(input: ProjectInput) {
     source: input.source,
     leadId: input.leadId,
     payments: [],
-    portalEnabled: false,
-    portalToken: null,
+    portalEnabled: true,
+    portalToken: generatePortalToken(),
     portalPinHash: null,
     stagingUrl: null,
     portalIntro: null,
@@ -823,8 +847,14 @@ export async function createProject(input: ProjectInput) {
     clientCanComment: true,
     portalLocale: "en",
     archivedAt: null,
+    portalClientLastSeenAt: null,
+    portalStudioLastReadAt: null,
+    portalClientLastReadAt: null,
   };
   await saveProjects([project, ...projects]);
+  revalidatePath("/messages");
+  revalidatePath(`/messages/${project.id}`);
+  if (client.id) revalidatePath(`/clients/${client.id}`);
 
   // Converting a lead → mark it Won
   if (input.leadId) {
@@ -1149,11 +1179,18 @@ export type ClientInput = {
   vatId?: string;
   registrationNumber?: string;
   paymentTermsDays?: number | null;
+  firstName?: string;
+  lastName?: string;
+  billingKind?: "person" | "company" | null;
+  createPortalAccount?: boolean;
+  portalEmail?: string;
+  portalLocale?: "en" | "sl";
 };
 
 export async function createClient(input: ClientInput) {
   const clients = await getClients();
-  const client: Client = {
+  const portalLocale = input.portalLocale === "sl" ? "sl" : "en";
+  const client: Client = normalizeClient({
     id: uid("c"),
     name: input.name,
     email: input.email,
@@ -1170,8 +1207,19 @@ export async function createClient(input: ClientInput) {
     vatId: input.vatId ?? "",
     registrationNumber: input.registrationNumber ?? "",
     paymentTermsDays: input.paymentTermsDays ?? null,
-  };
+    authUserId: null,
+    portalEmail: null,
+    onboardingCompletedAt: null,
+    portalLocale,
+    billingKind: input.billingKind ?? null,
+    firstName: input.firstName ?? "",
+    lastName: input.lastName ?? "",
+  });
   await saveClients([client, ...clients]);
+  const email = (input.portalEmail || input.email || "").trim();
+  if (input.createPortalAccount && !client.authUserId && email) {
+    await inviteClientPortalAccount(client.id, email, portalLocale);
+  }
   revalidatePath("/clients");
   return client.id;
 }
@@ -1224,6 +1272,7 @@ export async function restoreProject(id: string) {
 
 export async function updateClient(id: string, input: ClientInput) {
   const clients = await getClients();
+  const existingClient = clients.find((c) => c.id === id);
   await saveClients(
     clients.map((c) =>
       c.id === id
@@ -1246,16 +1295,54 @@ export async function updateClient(id: string, input: ClientInput) {
               input.paymentTermsDays !== undefined
                 ? input.paymentTermsDays
                 : c.paymentTermsDays,
+            firstName:
+              input.firstName !== undefined ? input.firstName : c.firstName,
+            lastName:
+              input.lastName !== undefined ? input.lastName : c.lastName,
+            billingKind:
+              input.billingKind !== undefined
+                ? input.billingKind
+                : c.billingKind,
+            portalLocale:
+              input.portalLocale !== undefined
+                ? input.portalLocale === "sl"
+                  ? "sl"
+                  : "en"
+                : c.portalLocale,
           }
         : c
     )
   );
-  // Keep denormalized project.client in sync
+  // Keep denormalized project.client (+ locale) in sync
   const projects = await getProjects();
   const name = input.name.trim();
+  const nextLocale =
+    input.portalLocale === "sl"
+      ? "sl"
+      : input.portalLocale === "en"
+        ? "en"
+        : existingClient?.portalLocale ?? "en";
   await saveProjects(
-    projects.map((p) => (p.clientId === id ? { ...p, client: name } : p))
+    projects.map((p) =>
+      p.clientId === id
+        ? {
+            ...p,
+            client: name,
+            portalLocale: nextLocale,
+          }
+        : p
+    )
   );
+  const email = (
+    input.portalEmail ||
+    input.email ||
+    existingClient?.portalEmail ||
+    existingClient?.email ||
+    ""
+  ).trim();
+  if (input.createPortalAccount && !existingClient?.authUserId && email) {
+    await inviteClientPortalAccount(id, email, nextLocale);
+  }
   revalidatePath("/clients");
   revalidatePath(`/clients/${id}`);
   revalidatePath("/projects");

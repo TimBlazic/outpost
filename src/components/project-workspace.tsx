@@ -19,6 +19,8 @@ import {
   type Attachment,
   type Invoice,
   type Member,
+  type PortalMessage,
+  type PortalMessageReaction,
   type Project,
   type ProjectStatus,
   type Ticket,
@@ -26,16 +28,14 @@ import {
   type TicketCommentReaction,
 } from "@/lib/data";
 import {
+  PortalChat,
+  type ChatClientAuthor,
+} from "@/components/portal-chat";
+import {
   deleteProject,
   updateProjectMeta,
 } from "@/lib/actions";
 import { ArchiveToggle } from "@/components/archive-toggle";
-import {
-  disableProjectPortal,
-  enableProjectPortal,
-  rotatePortalToken,
-  setPortalPin,
-} from "@/lib/portal/actions";
 import { portalUrlForToken } from "@/lib/portal/url";
 import { eur, fmtDate, projectStatusColor } from "@/lib/format";
 import { TicketsPanel } from "@/components/tickets-panel";
@@ -78,30 +78,42 @@ export function ProjectWorkspace({
   tickets,
   files,
   invoices = [],
+  messages = [],
+  messageReactions = [],
+  messageFiles = [],
   ticketFiles = {},
   ticketComments = {},
   ticketReactions = {},
   ticketCommentFiles = {},
   members,
   currentUserName,
+  currentUserId,
+  clientAuthor,
+  clientPortalStatus,
+  clientPortalEmail,
 }: {
   project: Project;
   tickets: Ticket[];
   files: Attachment[];
   invoices?: Invoice[];
+  messages?: PortalMessage[];
+  messageReactions?: PortalMessageReaction[];
+  messageFiles?: Attachment[];
   ticketFiles?: Record<string, Attachment[]>;
   ticketComments?: Record<string, TicketComment[]>;
   ticketReactions?: Record<string, TicketCommentReaction[]>;
   ticketCommentFiles?: Record<string, Attachment[]>;
   members: Member[];
   currentUserName?: string;
+  currentUserId?: string | null;
+  clientAuthor?: ChatClientAuthor | null;
+  clientPortalStatus?: "no-account" | "invited" | "active" | null;
+  clientPortalEmail?: string | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [description, setDescription] = useState(project.description ?? "");
-  const [pin, setPin] = useState("");
   const [copied, setCopied] = useState(false);
-  const [portalError, setPortalError] = useState<string | null>(null);
   const [perms, setPerms] = useState({
     clientCanViewTickets: project.clientCanViewTickets,
     clientCanCreateTickets: project.clientCanCreateTickets,
@@ -274,6 +286,10 @@ export function ProjectWorkspace({
       <Tabs defaultValue="tickets" className="gap-4">
         <TabsList>
           <TabsTrigger value="tickets">Tickets</TabsTrigger>
+          <TabsTrigger value="messages">
+            Messages
+            {messages.length > 0 ? ` · ${messages.length}` : ""}
+          </TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="payments">
             Payments
@@ -298,6 +314,36 @@ export function ProjectWorkspace({
             clientName={project.client}
             currentUserName={currentUserName}
           />
+        </TabsContent>
+
+        <TabsContent value="messages" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              Same channel as the client portal
+              {project.portalEnabled ? "" : " (portal is off)"}.
+            </p>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/messages/${project.id}`}>Open in Messages</Link>
+            </Button>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border">
+            <PortalChat
+              projectId={project.id}
+              messages={messages}
+              reactions={messageReactions}
+              files={messageFiles}
+              members={members}
+              viewer="studio"
+              compact
+              currentAuthorName={currentUserName}
+              currentAuthorId={currentUserId}
+              clientAuthor={clientAuthor}
+              channelTitle={
+                clientAuthor?.name || project.client || project.name
+              }
+              channelSubtitle={project.name}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="files">
@@ -380,133 +426,63 @@ export function ProjectWorkspace({
               </span>
             </div>
 
-            {!project.portalEnabled ? (
-              <div className="space-y-3">
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Client access uses a portal login URL (no project PIN).
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Client account status:{" "}
+                <span className="font-medium text-foreground">
+                  {clientPortalStatus === "active"
+                    ? "Active"
+                    : clientPortalStatus === "invited"
+                      ? "Invited"
+                      : clientPortalStatus === "no-account"
+                        ? "No account"
+                        : "Unknown"}
+                </span>
+                {clientPortalEmail ? ` · ${clientPortalEmail}` : ""}
+              </p>
+              {project.clientId ? (
                 <p className="text-sm text-muted-foreground">
-                  Share a link and PIN so the client can view tickets and files.
+                  Manage account status on the{" "}
+                  <Link
+                    href={`/clients/${project.clientId}`}
+                    className="font-medium text-foreground hover:underline"
+                  >
+                    client profile
+                  </Link>
+                  .
                 </p>
-                <div className="flex flex-wrap items-end gap-2">
-                  <div>
-                    <Label className="mb-1.5 text-xs">PIN</Label>
+              ) : (
+                <p className="text-sm text-amber-600">
+                  Link this project to a client to manage account access.
+                </p>
+              )}
+              {project.portalEnabled && portalUrl ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Legacy link support (temporary)
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Input
-                      type="password"
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      placeholder="Min. 4 chars"
-                      className="h-9 w-40"
+                      readOnly
+                      value={portalUrl}
+                      className="h-9 min-w-0 flex-1 font-mono text-xs"
                     />
+                    <Button variant="outline" size="sm" onClick={copyLink}>
+                      <Copy className="size-3.5" />
+                      {copied ? "Copied" : "Copy"}
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={portalUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    disabled={pending || pin.trim().length < 4}
-                    onClick={() => {
-                      setPortalError(null);
-                      startTransition(async () => {
-                        try {
-                          await enableProjectPortal(project.id, pin);
-                          setPin("");
-                        } catch (e) {
-                          setPortalError(
-                            e instanceof Error ? e.message : "Failed"
-                          );
-                        }
-                      });
-                    }}
-                  >
-                    Enable
-                  </Button>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    readOnly
-                    value={portalUrl}
-                    className="h-9 min-w-0 flex-1 font-mono text-xs"
-                  />
-                  <Button variant="outline" size="sm" onClick={copyLink}>
-                    <Copy className="size-3.5" />
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={portalUrl} target="_blank" rel="noreferrer">
-                      <ExternalLink className="size-3.5" />
-                    </a>
-                  </Button>
-                </div>
-                <div className="flex flex-wrap items-end gap-2">
-                  <div>
-                    <Label className="mb-1.5 text-xs">Reset PIN</Label>
-                    <Input
-                      type="password"
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      className="h-9 w-36"
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pending || pin.trim().length < 4}
-                    onClick={() =>
-                      startTransition(async () => {
-                        await setPortalPin(project.id, pin);
-                        setPin("");
-                      })
-                    }
-                  >
-                    Save PIN
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        await rotatePortalToken(project.id);
-                      })
-                    }
-                  >
-                    Rotate link
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(() => disableProjectPortal(project.id))
-                    }
-                  >
-                    Disable
-                  </Button>
-                </div>
-              </div>
-            )}
-            {portalError && (
-              <p className="text-sm text-rose-600">{portalError}</p>
-            )}
-          </section>
-
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Portal language</h3>
-            <p className="text-sm text-muted-foreground">
-              Language the client sees in their portal.
-            </p>
-            <Select
-              className="h-9 w-48"
-              defaultValue={project.portalLocale ?? "en"}
-              disabled={pending}
-              onChange={(e) =>
-                patchMeta({
-                  portalLocale: e.target.value === "sl" ? "sl" : "en",
-                })
-              }
-            >
-              <option value="en">English</option>
-              <option value="sl">Slovenščina</option>
-            </Select>
+              ) : null}
+            </div>
           </section>
 
           <section className="space-y-3">

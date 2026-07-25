@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getHostRole, getRequestHostname } from "@/lib/hosts";
+
 import { getSupabaseEnv, isSupabaseEnabled } from "./env";
 
 export async function updateSession(request: NextRequest) {
@@ -35,15 +37,19 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isLogin = pathname === "/login";
+  const hostname = getRequestHostname(request.headers.get("host"));
+  const role = getHostRole(hostname);
+  const isClientHost = role === "client";
+  const loginPath = isClientHost ? "/client-login" : "/login";
+  const isLogin = pathname === "/login" || pathname === "/client-login";
   const isAuthCallback = pathname.startsWith("/auth");
   const isPortal = pathname.startsWith("/portal");
   const isInboundApi = pathname.startsWith("/api/leads/inbound");
 
   if (!user && !isLogin && !isAuthCallback && !isPortal && !isInboundApi) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("next", pathname);
+    redirectUrl.pathname = loginPath;
+    redirectUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(redirectUrl);
   }
 

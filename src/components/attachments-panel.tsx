@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDelete } from "@/components/confirm-delete";
+import { ImageThumb } from "@/components/image-lightbox";
 import { cn } from "@/lib/utils";
 
 const linkKinds: AttachmentKind[] = [
@@ -248,19 +249,13 @@ export function AttachmentsPanel({
                 {images.map((a) => (
                   <div key={a.id} className="group relative">
                     {a.url ? (
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block overflow-hidden rounded-lg border border-border"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={a.url}
-                          alt={a.label}
-                          className="size-20 object-cover transition-opacity hover:opacity-90"
-                        />
-                      </a>
+                      <ImageThumb
+                        src={a.url}
+                        alt={a.label}
+                        name={a.label}
+                        className="rounded-lg border border-border"
+                        imgClassName="size-20 object-cover"
+                      />
                     ) : (
                       <div className="flex size-20 items-center justify-center rounded-lg border border-border bg-muted/40">
                         <ImageIcon className="size-5 text-muted-foreground" />

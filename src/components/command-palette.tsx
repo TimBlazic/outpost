@@ -8,7 +8,9 @@ import {
   CheckSquare,
   FileText,
   FolderKanban,
+  Images,
   LayoutDashboard,
+  MessageSquare,
   Plus,
   Receipt,
   Search,
@@ -137,6 +139,13 @@ const STATIC_ACTIONS: PaletteItem[] = [
     section: "Go to",
   },
   {
+    id: "go-messages",
+    title: "Messages",
+    href: "/messages",
+    icon: MessageSquare,
+    section: "Go to",
+  },
+  {
     id: "go-invoices",
     title: "Invoices",
     href: "/invoices",
@@ -148,6 +157,13 @@ const STATIC_ACTIONS: PaletteItem[] = [
     title: "Docs",
     href: "/docs",
     icon: BookOpen,
+    section: "Go to",
+  },
+  {
+    id: "go-moodboard",
+    title: "Moodboard",
+    href: "/moodboard",
+    icon: Images,
     section: "Go to",
   },
   {

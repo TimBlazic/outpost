@@ -20,6 +20,8 @@ truncate table
   public.portal_approvals,
   public.phase_checklist_items,
   public.project_phases,
+  public.portal_message_reactions,
+  public.portal_messages,
   public.portal_comments,
   public.portal_updates,
   public.attachments,

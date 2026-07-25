@@ -4,8 +4,14 @@ import { ArrowLeft, Pencil, Plus } from "lucide-react";
 
 import { deleteClient } from "@/lib/actions";
 import {
+  getClientLoginShareUrl,
+  inviteClientPortalAccount,
+  setClientPortalLocale,
+} from "@/lib/client-accounts/invite";
+import {
   getClientById,
   getInvoices,
+  getPortalMessages,
   getProjectsForClient,
 } from "@/lib/store";
 import { isArchived, type Invoice } from "@/lib/data";
@@ -24,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { DataTable } from "@/components/data-table";
 import { ClickableRow } from "@/components/clickable-row";
+import { ClientPortalAccountPanel } from "@/components/client-portal-account-panel";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -51,10 +58,12 @@ export default async function ClientDetailPage({
   const { id } = await params;
   const client = await getClientById(id);
   if (!client) notFound();
+  const clientId = client.id;
 
-  const [projects, allInvoices] = await Promise.all([
+  const [projects, allInvoices, allMessages] = await Promise.all([
     getProjectsForClient(id),
     getInvoices(),
+    getPortalMessages(),
   ]);
   const invoices = allInvoices
     .filter((inv) => inv.clientId === id)
@@ -62,8 +71,44 @@ export default async function ClientDetailPage({
       a.issueDate < b.issueDate ? 1 : a.issueDate > b.issueDate ? -1 : 0
     );
 
+  const lastByProject = new Map<string, (typeof allMessages)[number]>();
+  for (const m of allMessages) {
+    const prev = lastByProject.get(m.projectId);
+    if (!prev || prev.createdAt < m.createdAt) lastByProject.set(m.projectId, m);
+  }
+  const chatProjects = projects
+    .filter((p) => !isArchived(p) && (p.portalEnabled || lastByProject.has(p.id)))
+    .map((p) => ({
+      project: p,
+      last: lastByProject.get(p.id) ?? null,
+    }))
+    .sort((a, b) => {
+      const at = a.last?.createdAt ?? "";
+      const bt = b.last?.createdAt ?? "";
+      if (at === bt) return a.project.name.localeCompare(b.project.name);
+      return at < bt ? 1 : -1;
+    });
+
+  async function ensurePortalAccountAction(
+    portalEmail: string,
+    portalLocale: "en" | "sl"
+  ) {
+    "use server";
+    return inviteClientPortalAccount(clientId, portalEmail, portalLocale);
+  }
+
+  async function setPortalLocaleAction(portalLocale: "en" | "sl") {
+    "use server";
+    return setClientPortalLocale(clientId, portalLocale);
+  }
+
+  const loginUrl = await getClientLoginShareUrl(
+    client.portalEmail ?? client.email,
+    client.portalLocale
+  );
+
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">
+    <div className="w-full space-y-8 p-4 lg:p-6">
       <Link
         href="/clients"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -89,6 +134,16 @@ export default async function ClientDetailPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ClientPortalAccountPanel
+            authUserId={client.authUserId}
+            portalEmail={client.portalEmail}
+            onboardingCompletedAt={client.onboardingCompletedAt}
+            portalLocale={client.portalLocale}
+            fallbackEmail={client.email}
+            loginUrl={loginUrl}
+            ensurePortalAccount={ensurePortalAccountAction}
+            setPortalLocale={setPortalLocaleAction}
+          />
           <ArchiveToggle
             kind="client"
             id={client.id}
@@ -242,6 +297,52 @@ export default async function ClientDetailPage({
                     <TableCell className="text-sm">{eur(p.value)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {fmtDate(p.actualEnd ?? p.estimatedEnd)}
+                    </TableCell>
+                  </ClickableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </DataTable>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">
+            Project chats{" "}
+            <span className="font-normal text-muted-foreground">
+              ({chatProjects.length})
+            </span>
+          </h2>
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/messages">All messages</Link>
+          </Button>
+        </div>
+        {chatProjects.length === 0 ? (
+          <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+            Enable a portal on a project to chat with this client.
+          </p>
+        ) : (
+          <DataTable>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Project</TableHead>
+                  <TableHead>Last message</TableHead>
+                  <TableHead className="w-[8rem]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {chatProjects.map(({ project: p, last }) => (
+                  <ClickableRow key={p.id} href={`/messages/${p.id}`}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="max-w-md truncate text-sm text-muted-foreground">
+                      {last
+                        ? `${last.authorName}: ${last.body}`
+                        : "No messages yet"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground">
+                      Open
                     </TableCell>
                   </ClickableRow>
                 ))}

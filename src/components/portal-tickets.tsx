@@ -14,12 +14,16 @@ import {
   type TicketCommentReaction,
   type TicketStatus,
 } from "@/lib/data";
-import { clientCreateTicket } from "@/lib/portal/actions";
+import {
+  clientCreateTicket,
+  sessionClientCreateTicket,
+} from "@/lib/portal/actions";
 import {
   portalStatusLabel,
   portalT,
   type PortalLocale,
 } from "@/lib/portal/i18n";
+import { mentionHandle } from "@/lib/mentions";
 import { ticketShortId, ticketStatusMeta } from "@/components/ticket-status-badge";
 import { Markdown } from "@/components/markdown";
 import { TicketComments } from "@/components/ticket-comments";
@@ -73,6 +77,7 @@ function PortalTicketDrawer({
   reactions = [],
   commentFiles = [],
   members = [],
+  viewer = "token",
 }: {
   ticket: Ticket | null;
   locale: PortalLocale;
@@ -84,6 +89,7 @@ function PortalTicketDrawer({
   reactions?: TicketCommentReaction[];
   commentFiles?: Attachment[];
   members?: Member[];
+  viewer?: "token" | "session";
 }) {
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -160,7 +166,7 @@ function PortalTicketDrawer({
           mentionExtras={[
             {
               label: project.client || "Client",
-              insert: `@${(project.client || "Client").replace(/\s+/g, "")}`,
+              insert: mentionHandle(project.client || "Client"),
             },
           ]}
           canComment={project.clientCanComment}
@@ -168,6 +174,7 @@ function PortalTicketDrawer({
           currentAuthorName={project.client || "Client"}
           variant="portal"
           portalToken={token}
+          sessionProjectId={viewer === "session" ? project.id : undefined}
           stickyFooter
           labels={{
             comments: t.comments,
@@ -235,9 +242,11 @@ export function PortalTickets({
   members = [],
   locale,
   initialSelectedId = null,
+  viewer = "token",
 }: {
   token: string;
   project: Project;
+
   tickets: Ticket[];
   ticketComments?: Record<string, TicketComment[]>;
   ticketReactions?: Record<string, TicketCommentReaction[]>;
@@ -245,6 +254,7 @@ export function PortalTickets({
   members?: Member[];
   locale: PortalLocale;
   initialSelectedId?: string | null;
+  viewer?: "token" | "session";
 }) {
   const t = portalT(locale);
   const [view, setView] = useState<ViewMode>("board");
@@ -283,7 +293,13 @@ export function PortalTickets({
     setError(null);
     startTransition(async () => {
       try {
-        const id = await clientCreateTicket(token, { title, description });
+        const id =
+          viewer === "session"
+            ? await sessionClientCreateTicket(project.id, {
+                title,
+                description,
+              })
+            : await clientCreateTicket(token, { title, description });
         setTitle("");
         setDescription("");
         setCreating(false);
@@ -481,6 +497,7 @@ export function PortalTickets({
         reactions={selected ? ticketReactions[selected.id] ?? [] : []}
         commentFiles={selected ? ticketCommentFiles[selected.id] ?? [] : []}
         members={members}
+        viewer={viewer}
       />
     </div>
   );

@@ -8,6 +8,8 @@ import type {
   Member,
   Payment,
   PortalComment,
+  PortalMessage,
+  PortalMessageReaction,
   PortalUpdate,
   Project,
   Task,
@@ -18,6 +20,7 @@ import type {
 import {
   members as seedMembers,
   normalizeMember,
+  normalizePortalMessage,
   normalizeProject,
   normalizeTask,
   normalizeTicket,
@@ -28,6 +31,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getAttachments,
   getPortalComments,
+  getPortalMessages,
+  getPortalMessageReactions,
   getPortalUpdates,
   getProjectByPortalToken as storeProjectByToken,
   getTasks,
@@ -36,6 +41,8 @@ import {
   getTicketCommentReactions,
   saveAttachments,
   savePortalComments,
+  savePortalMessages,
+  savePortalMessageReactions,
   savePortalUpdates,
   saveProjects,
   saveTasks,
@@ -81,6 +88,9 @@ function mapProjectRow(
     clientCanComment: row.client_can_comment !== false,
     portalLocale: row.portal_locale === "sl" ? "sl" : "en",
     archivedAt: (row.archived_at as string) ?? null,
+    portalClientLastSeenAt: (row.portal_client_last_seen_at as string) ?? null,
+    portalStudioLastReadAt: (row.portal_studio_last_read_at as string) ?? null,
+    portalClientLastReadAt: (row.portal_client_last_read_at as string) ?? null,
   });
 }
 
@@ -593,10 +603,150 @@ export async function portalGetTeamMembers(): Promise<Member[]> {
       id: row.id as string,
       name: (row.name as string) ?? "User",
       initials: (row.initials as string) ?? "?",
-      role: row.role === "Admin" ? "Admin" : "Member",
+      role: row.role === "Admin" ? "Admin" : row.role === "Client" ? "Client" : "Member",
       avatarUrl: (row.avatar_url as string) ?? null,
     })
   );
+}
+
+export async function portalGetMessages(projectId: string) {
+  if (!isSupabaseEnabled()) {
+    return (await getPortalMessages())
+      .filter((m) => m.projectId === projectId)
+      .sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
+  }
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("portal_messages")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) =>
+    normalizePortalMessage({
+      id: row.id as string,
+      projectId: row.project_id as string,
+      parentId: (row.parent_id as string) ?? null,
+      body: (row.body as string) ?? "",
+      authorKind: row.author_kind as PortalMessage["authorKind"],
+      authorId: (row.author_id as string) ?? null,
+      authorName: (row.author_name as string) ?? "",
+      createdAt: row.created_at as string,
+      editedAt: (row.edited_at as string) ?? null,
+      deletedAt: (row.deleted_at as string) ?? null,
+      attachmentId: (row.attachment_id as string) ?? null,
+    })
+  );
+}
+
+export async function portalSaveMessage(message: PortalMessage) {
+  const normalized = normalizePortalMessage(message);
+  if (!isSupabaseEnabled()) {
+    const all = await getPortalMessages();
+    const exists = all.some((m) => m.id === normalized.id);
+    await savePortalMessages(
+      exists
+        ? all.map((m) => (m.id === normalized.id ? normalized : m))
+        : [...all, normalized]
+    );
+    return;
+  }
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("portal_messages").upsert({
+    id: normalized.id,
+    project_id: normalized.projectId,
+    parent_id: normalized.parentId,
+    body: normalized.body,
+    author_kind: normalized.authorKind,
+    author_id: normalized.authorId,
+    author_name: normalized.authorName,
+    created_at: normalized.createdAt,
+    edited_at: normalized.editedAt,
+    deleted_at: normalized.deletedAt,
+    attachment_id: normalized.attachmentId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function portalGetMessageReactions(messageIds: string[]) {
+  if (!messageIds.length) return [] as PortalMessageReaction[];
+  if (!isSupabaseEnabled()) {
+    const set = new Set(messageIds);
+    return (await getPortalMessageReactions()).filter((r) =>
+      set.has(r.messageId)
+    );
+  }
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("portal_message_reactions")
+    .select("*")
+    .in("message_id", messageIds);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    messageId: row.message_id as string,
+    emoji: row.emoji as string,
+    authorKind: row.author_kind as PortalMessageReaction["authorKind"],
+    authorName: (row.author_name as string) ?? "",
+    createdAt: row.created_at as string,
+  }));
+}
+
+export async function portalSaveMessageReaction(
+  reaction: PortalMessageReaction
+) {
+  if (!isSupabaseEnabled()) {
+    const all = await getPortalMessageReactions();
+    const exists = all.some((r) => r.id === reaction.id);
+    await savePortalMessageReactions(
+      exists
+        ? all.map((r) => (r.id === reaction.id ? reaction : r))
+        : [...all, reaction]
+    );
+    return;
+  }
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("portal_message_reactions").upsert({
+    id: reaction.id,
+    message_id: reaction.messageId,
+    emoji: reaction.emoji,
+    author_kind: reaction.authorKind,
+    author_name: reaction.authorName,
+    created_at: reaction.createdAt,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function portalDeleteMessageReaction(id: string) {
+  if (!isSupabaseEnabled()) {
+    const all = await getPortalMessageReactions();
+    await savePortalMessageReactions(all.filter((r) => r.id !== id));
+    return;
+  }
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("portal_message_reactions")
+    .delete()
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function portalGetMessageFiles(messageIds: string[]) {
+  if (!messageIds.length) return [] as Attachment[];
+  if (!isSupabaseEnabled()) {
+    const set = new Set(messageIds);
+    return (await getAttachments()).filter(
+      (a) => a.parentType === "portal_message" && set.has(a.parentId)
+    );
+  }
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("attachments")
+    .select("*")
+    .eq("parent_type", "portal_message")
+    .in("parent_id", messageIds);
+  if (error) throw new Error(error.message);
+  return signAttachments((data ?? []).map(mapAttachmentRow));
 }
 
 /** Studio path still uses normal store. */

@@ -201,3 +201,18 @@
 .app-reveal {
   animation: portal-fade-up 0.45s ease both;
 }
+
+@keyframes moodboard-pin-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.moodboard-pin {
+  animation: moodboard-pin-in 0.5s ease both;
+}

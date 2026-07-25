@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -10,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Paperclip, SmilePlus } from "lucide-react";
+import { Paperclip } from "lucide-react";
 
 import {
   memberById,
@@ -30,12 +31,21 @@ import {
   clientCreateTicketComment,
   clientToggleTicketCommentReaction,
   clientUploadPortalFile,
+  sessionClientCreateTicketComment,
+  sessionClientToggleTicketCommentReaction,
+  sessionClientUploadPortalFile,
 } from "@/lib/portal/actions";
 import { cn } from "@/lib/utils";
+import {
+  mentionHandle,
+  mentionQueryAt,
+  replaceMentionQuery,
+  splitMentions,
+} from "@/lib/mentions";
+import { useTicketCommentsRealtime } from "@/lib/realtime/ticket-comments";
 import { Button } from "@/components/ui/button";
+import { ReactionPicker } from "@/components/reaction-picker";
 import { UserAvatar } from "@/components/user-avatar";
-
-const REACTIONS = ["👍", "❤️", "👀", "🎉", "😄"] as const;
 
 function relativeTime(iso: string) {
   const ts = Date.parse(iso);
@@ -52,8 +62,7 @@ function relativeTime(iso: string) {
 }
 
 function renderBody(body: string) {
-  const parts = body.split(/(@[\w][\w.-]*)/g);
-  return parts.map((part, i) => {
+  return splitMentions(body).map((part, i) => {
     if (part.startsWith("@")) {
       return (
         <span
@@ -150,7 +159,14 @@ function MentionComposer({
   const [cursor, setCursor] = useState(0);
 
   useEffect(() => {
-    if (autoFocus) ref.current?.focus();
+    if (!autoFocus) return;
+    const el = ref.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    });
   }, [autoFocus]);
 
   const filtered = useMemo(() => {
@@ -162,23 +178,17 @@ function MentionComposer({
   }, [mentions, query]);
 
   function scanMention(text: string, caret: number) {
-    const before = text.slice(0, caret);
-    const match = before.match(/@([\w.-]*)$/);
-    setQuery(match ? match[1] : null);
+    setQuery(mentionQueryAt(text, caret));
   }
 
   function insertMention(opt: MentionOption) {
     const el = ref.current;
     if (!el) return;
     const caret = el.selectionStart ?? value.length;
-    const before = value.slice(0, caret);
-    const after = value.slice(caret);
-    const replaced = before.replace(/@([\w.-]*)$/, `${opt.insert} `);
-    const next = replaced + after;
+    const { next, caret: pos } = replaceMentionQuery(value, caret, opt.insert);
     onChange(next);
     setQuery(null);
     requestAnimationFrame(() => {
-      const pos = replaced.length;
       el.focus();
       el.setSelectionRange(pos, pos);
     });
@@ -287,6 +297,7 @@ export function TicketComments({
   currentAuthorName,
   variant = "studio",
   portalToken,
+  sessionProjectId,
   labels,
   stickyFooter = false,
   above,
@@ -303,6 +314,7 @@ export function TicketComments({
   currentAuthorName: string;
   variant?: "studio" | "portal";
   portalToken?: string;
+  sessionProjectId?: string;
   labels?: {
     comments?: string;
     write?: string;
@@ -327,11 +339,17 @@ export function TicketComments({
   const replyFileRef = useRef<HTMLInputElement>(null);
   const portal = variant === "portal";
 
+  // Realtime: refresh comment thread on changes
+  const handleRealtimeChange = useCallback(() => {
+    router.refresh();
+  }, [router]);
+  useTicketCommentsRealtime(ticketId, handleRealtimeChange);
+
   const mentions = useMemo<MentionOption[]>(() => {
     const base: MentionOption[] = [
       { label: "Studio", insert: "@Studio" },
       ...mentionExtras,
-      ...members.map((m) => ({ label: m.name, insert: `@${m.name.replace(/\s+/g, "")}` })),
+      ...members.map((m) => ({ label: m.name, insert: mentionHandle(m.name) })),
     ];
     const seen = new Set<string>();
     return base.filter((m) => {
@@ -380,7 +398,10 @@ export function TicketComments({
       fd.set("parentId", commentId);
       fd.set("label", file.name);
       fd.set("file", file);
-      if (portal && portalToken) {
+      if (portal && sessionProjectId) {
+        fd.set("projectId", sessionProjectId);
+        await sessionClientUploadPortalFile(fd);
+      } else if (portal && portalToken) {
         fd.set("token", portalToken);
         await clientUploadPortalFile(fd);
       } else {
@@ -394,7 +415,13 @@ export function TicketComments({
     startTransition(async () => {
       const content = text.trim() || (filesList.length ? "(attached files)" : "");
       let id: string;
-      if (portal && portalToken) {
+      if (portal && sessionProjectId) {
+        id = await sessionClientCreateTicketComment(
+          sessionProjectId,
+          ticketId,
+          { body: content, parentId }
+        );
+      } else if (portal && portalToken) {
         id = await clientCreateTicketComment(portalToken, ticketId, {
           body: content,
           parentId,
@@ -420,7 +447,13 @@ export function TicketComments({
 
   function onReact(commentId: string, emoji: string) {
     startTransition(async () => {
-      if (portal && portalToken) {
+      if (portal && sessionProjectId) {
+        await sessionClientToggleTicketCommentReaction(
+          sessionProjectId,
+          commentId,
+          emoji
+        );
+      } else if (portal && portalToken) {
         await clientToggleTicketCommentReaction(portalToken, commentId, emoji);
       } else {
         await toggleTicketCommentReaction(commentId, emoji);
@@ -582,53 +615,22 @@ export function TicketComments({
 
             {canComment && (
               <>
-                <div className="relative">
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      setEmojiFor(emojiFor === comment.id ? null : comment.id)
-                    }
-                    className={cn(
-                      "rounded-md p-1 transition-colors",
-                      portal
-                        ? "text-[var(--portal-muted)] hover:bg-[var(--portal-surface)] hover:text-[var(--portal-fg)]"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                    title="React"
-                  >
-                    <SmilePlus className="size-3.5" />
-                  </button>
-                  {emojiFor === comment.id && (
-                    <div
-                      className={cn(
-                        "absolute left-0 top-full z-10 mt-1 flex gap-0.5 rounded-lg border p-1 shadow-md",
-                        portal
-                          ? "border-[var(--portal-line)] bg-[var(--portal-bg)]"
-                          : "border-border bg-popover"
-                      )}
-                    >
-                      {REACTIONS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className="rounded px-1.5 py-0.5 text-sm hover:bg-muted"
-                          onClick={() => onReact(comment.id, emoji)}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <ReactionPicker
+                  open={emojiFor === comment.id}
+                  onOpenChange={(open) =>
+                    setEmojiFor(open ? comment.id : null)
+                  }
+                  onPick={(emoji) => onReact(comment.id, emoji)}
+                  disabled={pending}
+                  portal={portal}
+                />
 
                 <button
                   type="button"
                   disabled={pending}
                   onClick={() => {
-                    const mention = `@${comment.authorName.replace(/\s+/g, "")}`;
                     setReplyingTo(threadId);
-                    setReplyBody(`${mention} `);
+                    setReplyBody(`${mentionHandle(comment.authorName)} `);
                     setReplyFiles([]);
                   }}
                   className={cn(

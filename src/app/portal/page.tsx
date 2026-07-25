@@ -4,11 +4,14 @@ export const dynamic = "force-dynamic";
 
 /**
  * Landing when someone opens the portal host without a project token.
- * Real access is always /portal/[token] (+ PIN).
+ * Primary access is via /client-login (client requests a fresh sign-in link).
  */
 export default function PortalIndexPage() {
   return (
-    <div className="portal-skin flex min-h-screen items-center justify-center px-6">
+    <div
+      className="portal-skin flex min-h-screen items-center justify-center px-6"
+      data-theme="light"
+    >
       <div className="max-w-md text-center">
         <p className="text-[10px] tracking-[0.22em] uppercase text-[var(--portal-muted)]">
           Client portal
@@ -17,11 +20,15 @@ export default function PortalIndexPage() {
           Outpost
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-[var(--portal-muted)]">
-          Open the secure link your studio shared with you. It looks like{" "}
-          <span className="text-[var(--portal-fg)]">
-            /portal/your-project-token
-          </span>{" "}
-          and may ask for a PIN.
+          Sign in with your client portal email to open your projects.
+        </p>
+        <p className="mt-4 text-sm text-[var(--portal-muted)]">
+          <Link
+            href="/client-login"
+            className="underline decoration-[var(--portal-line)] underline-offset-4 hover:text-[var(--portal-fg)]"
+          >
+            Go to client login
+          </Link>
         </p>
         {process.env.NEXT_PUBLIC_ADMIN_URL ? (
           <p className="mt-8 text-xs text-[var(--portal-muted)]">

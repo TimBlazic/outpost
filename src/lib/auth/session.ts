@@ -14,11 +14,17 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const PROFILES_FILE = path.join(DATA_DIR, "profiles.json");
 
 function mapProfileRow(row: Record<string, unknown>): Member {
+  const rawRole = row.role as string | undefined;
   return normalizeMember({
     id: row.id as string,
     name: (row.name as string) ?? "User",
     initials: (row.initials as string) ?? "?",
-    role: row.role === "Admin" ? "Admin" : "Member",
+    role:
+      rawRole === "Admin"
+        ? "Admin"
+        : rawRole === "Client"
+          ? "Client"
+          : "Member",
     avatarUrl: (row.avatar_url as string) ?? null,
   });
 }
@@ -43,6 +49,38 @@ async function saveFileProfiles(profiles: Member[]) {
     JSON.stringify(profiles.map(normalizeMember), null, 2),
     "utf8"
   );
+}
+
+/**
+ * Require an authenticated studio user (Admin or Member).
+ * Rejects Client-role users to prevent client accounts from accessing
+ * studio-only API routes.
+ */
+export async function requireStudioSession(): Promise<Member> {
+  if (!isSupabaseEnabled()) {
+    const profiles = await loadFileProfiles();
+    return profiles.find((p) => p.id === "u1") ?? normalizeMember(seedMembers[0]);
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, name, initials, role, avatar_url")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!data) throw new Error("Unauthorized");
+
+  const profile = mapProfileRow(data as Record<string, unknown>);
+  if (profile.role === "Client") {
+    throw new Error("Forbidden: studio access required");
+  }
+  return profile;
 }
 
 export async function getCurrentUserId(): Promise<string> {
