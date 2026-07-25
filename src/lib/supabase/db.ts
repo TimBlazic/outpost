@@ -14,6 +14,9 @@ import type {
   Doc,
   Payment,
   FirmSettings,
+  Invoice,
+  InvoiceClientSnapshot,
+  InvoiceLineItem,
   PortalUpdate,
   PortalComment,
   ProjectPhase,
@@ -27,6 +30,8 @@ import type {
 import {
   defaultFirmSettings,
   normalizeClient,
+  normalizeFirmSettings,
+  normalizeInvoice,
   normalizeLead,
   normalizeProject,
   normalizeTask,
@@ -161,6 +166,47 @@ function mapClient(row: Record<string, unknown>): Client {
     leadId: (row.lead_id as string) || undefined,
     createdAt: (row.created_at as string) ?? new Date().toISOString(),
     archivedAt: (row.archived_at as string) ?? null,
+    billingAddress: (row.billing_address as string) ?? "",
+    taxNumber: (row.tax_number as string) ?? "",
+    vatId: (row.vat_id as string) ?? "",
+    registrationNumber: (row.registration_number as string) ?? "",
+    paymentTermsDays:
+      row.payment_terms_days == null
+        ? null
+        : Number(row.payment_terms_days),
+  });
+}
+
+function mapInvoice(row: Record<string, unknown>): Invoice {
+  return normalizeInvoice({
+    id: row.id as string,
+    clientId: (row.client_id as string) ?? null,
+    projectId: (row.project_id as string) ?? null,
+    clientSnapshot: (row.client_snapshot as InvoiceClientSnapshot) ?? {
+      name: "",
+      email: "",
+      companyName: "",
+      address: "",
+      vatId: "",
+      taxNumber: "",
+      registrationNumber: "",
+    },
+    invoiceNumber: (row.invoice_number as string) ?? null,
+    year: row.year == null ? null : Number(row.year),
+    sequence: row.sequence == null ? null : Number(row.sequence),
+    status: row.status as Invoice["status"],
+    issueDate: row.issue_date as string,
+    dueDate: row.due_date as string,
+    paidAt: (row.paid_at as string) ?? null,
+    currency: (row.currency as Invoice["currency"]) ?? "EUR",
+    lineItems: (row.line_items as InvoiceLineItem[]) ?? [],
+    subtotal: Number(row.subtotal ?? 0),
+    taxTotal: Number(row.tax_total ?? 0),
+    total: Number(row.total ?? 0),
+    notes: (row.notes as string) ?? "",
+    createdBy: (row.created_by as string) ?? null,
+    createdAt: (row.created_at as string) ?? new Date().toISOString(),
+    updatedAt: (row.updated_at as string) ?? new Date().toISOString(),
   });
 }
 
@@ -683,7 +729,7 @@ export async function getFirmSettings(): Promise<FirmSettings> {
     .maybeSingle();
   throwIf(error);
   if (!data) return { ...defaultFirmSettings };
-  return {
+  return normalizeFirmSettings({
     firmName: (data.firm_name as string) || defaultFirmSettings.firmName,
     revenueGoal: Number(data.revenue_goal ?? defaultFirmSettings.revenueGoal),
     goalYear: Number(data.goal_year ?? defaultFirmSettings.goalYear),
@@ -693,18 +739,60 @@ export async function getFirmSettings(): Promise<FirmSettings> {
     monthlyRevenue:
       (data.monthly_revenue as FirmSettings["monthlyRevenue"]) ??
       defaultFirmSettings.monthlyRevenue,
-  };
+    billingCompanyName: (data.billing_company_name as string) ?? "",
+    billingAddress: (data.billing_address as string) ?? "",
+    billingEmail: (data.billing_email as string) ?? "",
+    billingPhone: (data.billing_phone as string) ?? "",
+    taxNumber: (data.tax_number as string) ?? "",
+    vatId: (data.vat_id as string) ?? "",
+    vatStatus: (data.vat_status as string) ?? "",
+    registrationNumber: (data.registration_number as string) ?? "",
+    iban: (data.iban as string) ?? "",
+    bic: (data.bic as string) ?? "",
+    bankName: (data.bank_name as string) ?? "",
+    issuePlace: (data.issue_place as string) ?? "",
+    signaturePath: (data.signature_path as string) ?? null,
+    invoicePrefix: (data.invoice_prefix as string) ?? "",
+    invoiceNextSequenceByYear:
+      (data.invoice_next_sequence_by_year as Record<string, number>) ?? {},
+    defaultCurrency:
+      (data.default_currency as FirmSettings["defaultCurrency"]) ?? "EUR",
+    defaultPaymentTermsDays: Number(
+      data.default_payment_terms_days ??
+        defaultFirmSettings.defaultPaymentTermsDays
+    ),
+    aiEmailSystemPrompt: (data.ai_email_system_prompt as string) ?? "",
+  });
 }
 
 export async function saveFirmSettings(settings: FirmSettings) {
   const supabase = await createClient();
+  const s = normalizeFirmSettings(settings);
   const { error } = await supabase.from("firm_settings").upsert({
     id: "default",
-    firm_name: settings.firmName,
-    revenue_goal: settings.revenueGoal,
-    goal_year: settings.goalYear,
-    avg_project_value: settings.avgProjectValue,
-    monthly_revenue: settings.monthlyRevenue,
+    firm_name: s.firmName,
+    revenue_goal: s.revenueGoal,
+    goal_year: s.goalYear,
+    avg_project_value: s.avgProjectValue,
+    monthly_revenue: s.monthlyRevenue,
+    billing_company_name: s.billingCompanyName,
+    billing_address: s.billingAddress,
+    billing_email: s.billingEmail,
+    billing_phone: s.billingPhone,
+    tax_number: s.taxNumber,
+    vat_id: s.vatId,
+    vat_status: s.vatStatus,
+    registration_number: s.registrationNumber,
+    iban: s.iban,
+    bic: s.bic,
+    bank_name: s.bankName,
+    issue_place: s.issuePlace,
+    signature_path: s.signaturePath,
+    invoice_prefix: s.invoicePrefix,
+    invoice_next_sequence_by_year: s.invoiceNextSequenceByYear,
+    default_currency: s.defaultCurrency,
+    default_payment_terms_days: s.defaultPaymentTermsDays,
+    ai_email_system_prompt: s.aiEmailSystemPrompt,
     updated_at: new Date().toISOString(),
   });
   throwIf(error);
@@ -889,6 +977,63 @@ export async function saveClients(clients: Client[]) {
         lead_id: c.leadId ?? null,
         created_at: c.createdAt,
         archived_at: c.archivedAt ?? null,
+        billing_address: c.billingAddress,
+        tax_number: c.taxNumber,
+        vat_id: c.vatId,
+        registration_number: c.registrationNumber,
+        payment_terms_days: c.paymentTermsDays,
+      }))
+    );
+    throwIf(error);
+  }
+}
+
+export async function getInvoices(): Promise<Invoice[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*")
+    .order("issue_date", { ascending: false });
+  throwIf(error);
+  return (data ?? []).map(mapInvoice);
+}
+
+export async function saveInvoices(invoices: Invoice[]) {
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("invoices").select("id");
+  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
+  const nextIds = new Set(invoices.map((i) => i.id));
+  const toDelete = [...existingIds].filter((id) => !nextIds.has(id));
+  if (toDelete.length) {
+    const { error } = await supabase
+      .from("invoices")
+      .delete()
+      .in("id", toDelete);
+    throwIf(error);
+  }
+  if (invoices.length) {
+    const { error } = await supabase.from("invoices").upsert(
+      invoices.map((i) => ({
+        id: i.id,
+        client_id: i.clientId,
+        project_id: i.projectId,
+        client_snapshot: i.clientSnapshot,
+        invoice_number: i.invoiceNumber,
+        year: i.year,
+        sequence: i.sequence,
+        status: i.status,
+        issue_date: i.issueDate,
+        due_date: i.dueDate,
+        paid_at: i.paidAt,
+        currency: i.currency,
+        line_items: i.lineItems,
+        subtotal: i.subtotal,
+        tax_total: i.taxTotal,
+        total: i.total,
+        notes: i.notes,
+        created_by: i.createdBy,
+        created_at: i.createdAt,
+        updated_at: i.updatedAt,
       }))
     );
     throwIf(error);

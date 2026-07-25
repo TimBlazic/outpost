@@ -17,6 +17,7 @@ import {
   paidAmount,
   projectStatuses,
   type Attachment,
+  type Invoice,
   type Member,
   type Project,
   type ProjectStatus,
@@ -36,12 +37,13 @@ import {
   setPortalPin,
 } from "@/lib/portal/actions";
 import { portalUrlForToken } from "@/lib/portal/url";
-import { eur, projectStatusColor } from "@/lib/format";
+import { eur, fmtDate, projectStatusColor } from "@/lib/format";
 import { TicketsPanel } from "@/components/tickets-panel";
 import { AttachmentsPanel } from "@/components/attachments-panel";
 import { PaymentSchedule } from "@/components/payment-schedule";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,10 +66,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+const invoiceStatusColor: Record<Invoice["status"], string> = {
+  draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  issued: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  paid: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  void: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+};
+
 export function ProjectWorkspace({
   project,
   tickets,
   files,
+  invoices = [],
   ticketFiles = {},
   ticketComments = {},
   ticketReactions = {},
@@ -78,6 +88,7 @@ export function ProjectWorkspace({
   project: Project;
   tickets: Ticket[];
   files: Attachment[];
+  invoices?: Invoice[];
   ticketFiles?: Record<string, Attachment[]>;
   ticketComments?: Record<string, TicketComment[]>;
   ticketReactions?: Record<string, TicketCommentReaction[]>;
@@ -266,9 +277,11 @@ export function ProjectWorkspace({
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="payments">
             Payments
-            {project.payments.length > 0
-              ? ` · ${eur(paidAmount(project))}`
-              : ""}
+            {invoices.length > 0
+              ? ` · ${invoices.length} inv`
+              : project.payments.length > 0
+                ? ` · ${eur(paidAmount(project))}`
+                : ""}
           </TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -296,13 +309,66 @@ export function ProjectWorkspace({
           />
         </TabsContent>
 
-        <TabsContent value="payments" className="max-w-2xl">
-          <PaymentSchedule
-            projectId={project.id}
-            value={project.value}
-            payments={project.payments}
-            variant="plain"
-          />
+        <TabsContent value="payments" className="max-w-2xl space-y-8">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">Invoices</h3>
+              <Button variant="outline" size="sm" asChild>
+                <Link
+                  href={
+                    project.clientId
+                      ? `/invoices/new?clientId=${project.clientId}&projectId=${project.id}`
+                      : `/invoices/new?projectId=${project.id}`
+                  }
+                >
+                  New invoice
+                </Link>
+              </Button>
+            </div>
+            {invoices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No invoices linked yet. Assign one when you create or edit an
+                invoice — paid ones count toward dashboard revenue.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border/70 rounded-lg border border-border/70">
+                {invoices.map((inv) => (
+                  <li key={inv.id}>
+                    <Link
+                      href={`/invoices/${inv.id}`}
+                      className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-muted/40"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {inv.invoiceNumber || "Draft"}
+                        </span>
+                        <StatusPill
+                          label={inv.status}
+                          className={cn(
+                            "capitalize",
+                            invoiceStatusColor[inv.status]
+                          )}
+                        />
+                      </span>
+                      <span className="text-muted-foreground">
+                        {eur(inv.total)} · {fmtDate(inv.issueDate)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Installment schedule</h3>
+            <PaymentSchedule
+              projectId={project.id}
+              value={project.value}
+              payments={project.payments}
+              variant="plain"
+            />
+          </section>
         </TabsContent>
 
         <TabsContent value="settings" className="max-w-2xl space-y-10">

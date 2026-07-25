@@ -10,6 +10,7 @@ import {
   FolderKanban,
   LayoutDashboard,
   Plus,
+  Receipt,
   Search,
   Settings,
   Users,
@@ -77,6 +78,14 @@ const STATIC_ACTIONS: PaletteItem[] = [
     section: "Create",
   },
   {
+    id: "new-invoice",
+    title: "New invoice",
+    subtitle: "Create an invoice",
+    href: "/invoices/new",
+    icon: Plus,
+    section: "Create",
+  },
+  {
     id: "new-project",
     title: "New project",
     subtitle: "Create a project",
@@ -125,6 +134,13 @@ const STATIC_ACTIONS: PaletteItem[] = [
     title: "Projects",
     href: "/projects",
     icon: FolderKanban,
+    section: "Go to",
+  },
+  {
+    id: "go-invoices",
+    title: "Invoices",
+    href: "/invoices",
+    icon: Receipt,
     section: "Go to",
   },
   {

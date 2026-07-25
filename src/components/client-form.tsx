@@ -47,6 +47,7 @@ export function ClientForm({ client }: { client?: Client }) {
       (f.namedItem(id) as HTMLInputElement | HTMLTextAreaElement | null)
         ?.value ?? "";
 
+    const termsRaw = val("paymentTermsDays").trim();
     const input = {
       name: val("name").trim(),
       email: val("email").trim(),
@@ -56,6 +57,11 @@ export function ClientForm({ client }: { client?: Client }) {
       country: val("country").trim(),
       notes: val("notes"),
       leadId: client?.leadId,
+      billingAddress: val("billingAddress").trim(),
+      taxNumber: val("taxNumber").trim(),
+      vatId: val("vatId").trim(),
+      registrationNumber: val("registrationNumber").trim(),
+      paymentTermsDays: termsRaw === "" ? null : Number(termsRaw) || null,
     };
 
     startTransition(async () => {
@@ -162,6 +168,54 @@ export function ClientForm({ client }: { client?: Client }) {
               defaultValue={client?.notes}
               placeholder="Billing notes, contacts, preferences…"
               rows={4}
+            />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-3xl">
+        <CardHeader>
+          <CardTitle className="text-base">Billing</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Billing address"
+            htmlFor="billingAddress"
+            className="sm:col-span-2"
+          >
+            <Textarea
+              id="billingAddress"
+              name="billingAddress"
+              defaultValue={client?.billingAddress}
+              placeholder="Street, postcode city, country"
+              rows={2}
+            />
+          </Field>
+          <Field label="Tax number" htmlFor="taxNumber">
+            <Input
+              id="taxNumber"
+              name="taxNumber"
+              defaultValue={client?.taxNumber}
+            />
+          </Field>
+          <Field label="VAT ID" htmlFor="vatId">
+            <Input id="vatId" name="vatId" defaultValue={client?.vatId} />
+          </Field>
+          <Field label="Registration number" htmlFor="registrationNumber">
+            <Input
+              id="registrationNumber"
+              name="registrationNumber"
+              defaultValue={client?.registrationNumber}
+            />
+          </Field>
+          <Field label="Payment terms (days)" htmlFor="paymentTermsDays">
+            <Input
+              id="paymentTermsDays"
+              name="paymentTermsDays"
+              type="number"
+              min={0}
+              defaultValue={client?.paymentTermsDays ?? ""}
+              placeholder="Override firm default"
             />
           </Field>
         </CardContent>

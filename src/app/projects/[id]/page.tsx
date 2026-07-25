@@ -7,6 +7,7 @@ import {
   getAttachments,
   getTicketComments,
   getTicketCommentReactions,
+  getInvoices,
 } from "@/lib/store";
 import { getCurrentProfile, getTeamMembers } from "@/lib/auth/session";
 import { ProjectWorkspace } from "@/components/project-workspace";
@@ -35,6 +36,7 @@ export default async function ProjectDetailPage({
     allReactions,
     members,
     me,
+    allInvoices,
   ] = await Promise.all([
     getTicketsForProject(project.id),
     getAttachmentsFor("project", project.id),
@@ -43,7 +45,10 @@ export default async function ProjectDetailPage({
     getTicketCommentReactions(),
     getTeamMembers(),
     getCurrentProfile(),
+    getInvoices(),
   ]);
+
+  const invoices = allInvoices.filter((i) => i.projectId === project.id);
 
   const ticketIds = new Set(tickets.map((t) => t.id));
   const ticketFiles: Record<string, Attachment[]> = {};
@@ -92,6 +97,7 @@ export default async function ProjectDetailPage({
       project={project}
       tickets={tickets}
       files={files}
+      invoices={invoices}
       ticketFiles={ticketFiles}
       ticketComments={ticketComments}
       ticketReactions={ticketReactions}

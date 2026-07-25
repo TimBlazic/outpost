@@ -18,7 +18,7 @@ export default async function LeadsPage() {
   const openValue = open.reduce((s, l) => s + l.value, 0);
 
   return (
-    <div className="space-y-6 p-4 lg:p-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4 lg:p-6">
       <PageHeader
         title="Leads"
         description={`${open.length} open leads · ${eur(openValue)} in pipeline`}

@@ -41,8 +41,10 @@ In Supabase SQL Editor, run in order:
 8. `supabase/migrations/20260724230000_task_description.sql` (task description + files)
 9. `supabase/migrations/20260724240000_archive.sql` (archive clients / projects)
 10. `supabase/migrations/20260724250000_lead_description.sql` (lead description)
-11. `supabase/seed.sql` (optional)
-12. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
+11. `supabase/migrations/20260725200000_invoices.sql` (invoices + billing fields)
+12. `supabase/migrations/20260725210000_billing_company_name.sql` (issuer company name)
+13. `supabase/seed.sql` (optional)
+14. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
 
 Or with CLI:
 

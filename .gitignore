@@ -44,3 +44,7 @@ next-env.d.ts
 
 # Local file-based data store (seeded at runtime)
 /data
+
+# One-off Harvey export dumps (root)
+/invoices.json
+/customers.json

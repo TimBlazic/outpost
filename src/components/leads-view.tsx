@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Table2, KanbanSquare, Search, Users } from "lucide-react";
 
 import { type Lead } from "@/lib/data";
@@ -11,8 +11,12 @@ import { Input } from "@/components/ui/input";
 import { StatusPill } from "@/components/status-pill";
 import { LeadsKanban } from "@/components/leads-kanban";
 import { EmptyState } from "@/components/empty-state";
-import { DataTable } from "@/components/data-table";
 import { ClickableRow } from "@/components/clickable-row";
+import {
+  PaginatedDataTable,
+  stickyTableHeaderClass,
+  useClientPagination,
+} from "@/components/paginated-data-table";
 import {
   Table,
   TableBody,
@@ -25,14 +29,19 @@ import {
 export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
   const [query, setQuery] = useState("");
 
-  const leads = allLeads.filter((l) => {
-    const q = query.toLowerCase();
-    return (
-      l.company.toLowerCase().includes(q) ||
-      l.contact.toLowerCase().includes(q) ||
-      l.country.toLowerCase().includes(q)
+  const leads = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return allLeads;
+    return allLeads.filter(
+      (l) =>
+        l.company.toLowerCase().includes(q) ||
+        l.contact.toLowerCase().includes(q) ||
+        l.country.toLowerCase().includes(q)
     );
-  });
+  }, [allLeads, query]);
+
+  const { pageRows, page, setPage, pageCount, from, to, total } =
+    useClientPagination(leads, undefined, query);
 
   if (allLeads.length === 0) {
     return (
@@ -47,8 +56,8 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
   }
 
   return (
-    <Tabs defaultValue="table" className="gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <Tabs defaultValue="table" className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <TabsList>
           <TabsTrigger value="table">
             <Table2 className="size-4" /> Table
@@ -68,7 +77,10 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
         </div>
       </div>
 
-      <TabsContent value="table">
+      <TabsContent
+        value="table"
+        className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
+      >
         {leads.length === 0 ? (
           <EmptyState
             icon={Search}
@@ -77,9 +89,17 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
             className="py-10"
           />
         ) : (
-          <DataTable>
+          <PaginatedDataTable
+            total={total}
+            from={from}
+            to={to}
+            page={page}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            emptyLabel="No leads"
+          >
             <Table>
-              <TableHeader>
+              <TableHeader className={stickyTableHeaderClass}>
                 <TableRow>
                   <TableHead>Company</TableHead>
                   <TableHead>Contact</TableHead>
@@ -90,7 +110,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leads.map((l) => (
+                {pageRows.map((l) => (
                   <ClickableRow key={l.id} href={`/leads/${l.id}`}>
                     <TableCell>
                       <span className="font-medium">{l.company}</span>
@@ -123,11 +143,14 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
                 ))}
               </TableBody>
             </Table>
-          </DataTable>
+          </PaginatedDataTable>
         )}
       </TabsContent>
 
-      <TabsContent value="kanban">
+      <TabsContent
+        value="kanban"
+        className="mt-0 min-h-0 flex-1 overflow-auto data-[state=inactive]:hidden"
+      >
         {leads.length === 0 ? (
           <EmptyState
             icon={Search}

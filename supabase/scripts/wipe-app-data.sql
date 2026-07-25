@@ -27,6 +27,7 @@ truncate table
   public.tasks,
   public.notes,
   public.activities,
+  public.invoices,
   public.projects,
   public.clients,
   public.docs,

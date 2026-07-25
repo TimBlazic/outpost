@@ -541,12 +541,23 @@ export type Client = {
   createdAt: string;
   /** ISO timestamp when archived; null/undefined = active. */
   archivedAt: string | null;
+  /** Billing address for invoices (free text / comma-separated). */
+  billingAddress: string;
+  taxNumber: string;
+  vatId: string;
+  registrationNumber: string;
+  paymentTermsDays: number | null;
 };
 
 export function normalizeClient(c: Client): Client {
   return {
     ...c,
     archivedAt: c.archivedAt ?? null,
+    billingAddress: c.billingAddress ?? "",
+    taxNumber: c.taxNumber ?? "",
+    vatId: c.vatId ?? "",
+    registrationNumber: c.registrationNumber ?? "",
+    paymentTermsDays: c.paymentTermsDays ?? null,
   };
 }
 
@@ -555,9 +566,28 @@ export function isArchived(entity: { archivedAt?: string | null }) {
 }
 
 function clientSeed(
-  c: Omit<Client, "archivedAt"> & Partial<Pick<Client, "archivedAt">>
+  c: Omit<
+    Client,
+    | "archivedAt"
+    | "billingAddress"
+    | "taxNumber"
+    | "vatId"
+    | "registrationNumber"
+    | "paymentTermsDays"
+  > &
+    Partial<
+      Pick<
+        Client,
+        | "archivedAt"
+        | "billingAddress"
+        | "taxNumber"
+        | "vatId"
+        | "registrationNumber"
+        | "paymentTermsDays"
+      >
+    >
 ): Client {
-  return normalizeClient({ archivedAt: null, ...c });
+  return normalizeClient({ archivedAt: null, ...c } as Client);
 }
 
 export const clients: Client[] = [
@@ -1417,6 +1447,29 @@ export type FirmSettings = {
   goalYear: number;
   avgProjectValue: number;
   monthlyRevenue: MonthlyRevenuePoint[];
+  /** Issuer / s.p. billing for invoices */
+  /** Legal / trade name on the invoice (header + payment info). */
+  billingCompanyName: string;
+  billingAddress: string;
+  billingEmail: string;
+  billingPhone: string;
+  taxNumber: string;
+  vatId: string;
+  vatStatus: string;
+  registrationNumber: string;
+  iban: string;
+  bic: string;
+  bankName: string;
+  issuePlace: string;
+  /** Storage path or /api/files/... URL for signature PNG */
+  signaturePath: string | null;
+  invoicePrefix: string;
+  /** year (string) → next sequence number */
+  invoiceNextSequenceByYear: Record<string, number>;
+  defaultCurrency: "EUR" | "USD" | "GBP";
+  defaultPaymentTermsDays: number;
+  /** Editable system prompt for AI lead emails. Empty → app default. */
+  aiEmailSystemPrompt: string;
 };
 
 export const defaultFirmSettings: FirmSettings = {
@@ -1432,7 +1485,160 @@ export const defaultFirmSettings: FirmSettings = {
     { month: "May", revenue: 0 },
     { month: "Jun", revenue: 4500 },
   ],
+  billingCompanyName: "",
+  billingAddress: "",
+  billingEmail: "",
+  billingPhone: "",
+  taxNumber: "",
+  vatId: "",
+  vatStatus: "",
+  registrationNumber: "",
+  iban: "",
+  bic: "",
+  bankName: "",
+  issuePlace: "",
+  signaturePath: null,
+  invoicePrefix: "",
+  invoiceNextSequenceByYear: {},
+  defaultCurrency: "EUR",
+  defaultPaymentTermsDays: 14,
+  aiEmailSystemPrompt: "",
 };
+
+export function normalizeFirmSettings(s: FirmSettings): FirmSettings {
+  return {
+    ...defaultFirmSettings,
+    ...s,
+    signaturePath: s.signaturePath ?? null,
+    invoiceNextSequenceByYear: s.invoiceNextSequenceByYear ?? {},
+    defaultCurrency: s.defaultCurrency ?? "EUR",
+    defaultPaymentTermsDays: s.defaultPaymentTermsDays ?? 14,
+    aiEmailSystemPrompt: s.aiEmailSystemPrompt ?? "",
+  };
+}
+
+// ---- Invoices -------------------------------------------------------------
+
+export const invoiceStatuses = ["draft", "issued", "paid", "void"] as const;
+export type InvoiceStatus = (typeof invoiceStatuses)[number];
+
+export type InvoiceLineItem = {
+  description: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  taxRate: number;
+};
+
+export type InvoiceClientSnapshot = {
+  name: string;
+  email: string;
+  companyName: string;
+  address: string;
+  vatId: string;
+  taxNumber: string;
+  registrationNumber: string;
+};
+
+export type Invoice = {
+  id: string;
+  clientId: string | null;
+  /** Optional link to a delivery project (same client). */
+  projectId: string | null;
+  clientSnapshot: InvoiceClientSnapshot;
+  invoiceNumber: string | null;
+  year: number | null;
+  sequence: number | null;
+  status: InvoiceStatus;
+  issueDate: string;
+  dueDate: string;
+  /** Set when status becomes paid — drives dashboard collected revenue. */
+  paidAt: string | null;
+  currency: "EUR" | "USD" | "GBP";
+  lineItems: InvoiceLineItem[];
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  notes: string;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function computeInvoiceTotals(lineItems: InvoiceLineItem[]) {
+  let subtotal = 0;
+  let taxTotal = 0;
+  for (const l of lineItems) {
+    const lt = l.qty * l.unitPrice;
+    subtotal += lt;
+    taxTotal += (lt * (l.taxRate || 0)) / 100;
+  }
+  return {
+    subtotal: Math.round(subtotal * 100) / 100,
+    taxTotal: Math.round(taxTotal * 100) / 100,
+    total: Math.round((subtotal + taxTotal) * 100) / 100,
+  };
+}
+
+export function snapshotFromClient(client: Client): InvoiceClientSnapshot {
+  return {
+    // Invoices bill the company only — contact name stays off the PDF.
+    name: "",
+    email: client.email,
+    companyName: client.company || "",
+    address: client.billingAddress || "",
+    vatId: client.vatId || "",
+    taxNumber: client.taxNumber || "",
+    registrationNumber: client.registrationNumber || "",
+  };
+}
+
+export function normalizeInvoice(inv: Invoice): Invoice {
+  const lineItems = (inv.lineItems ?? []).map((l) => ({
+    description: l.description ?? "",
+    qty: Number(l.qty) || 0,
+    unit: l.unit ?? "",
+    unitPrice: Number(l.unitPrice) || 0,
+    taxRate: Number(l.taxRate) || 0,
+  }));
+  const totals = computeInvoiceTotals(lineItems);
+  return {
+    ...inv,
+    clientSnapshot: {
+      name: inv.clientSnapshot?.name ?? "",
+      email: inv.clientSnapshot?.email ?? "",
+      companyName: inv.clientSnapshot?.companyName ?? "",
+      address: inv.clientSnapshot?.address ?? "",
+      vatId: inv.clientSnapshot?.vatId ?? "",
+      taxNumber: inv.clientSnapshot?.taxNumber ?? "",
+      registrationNumber: inv.clientSnapshot?.registrationNumber ?? "",
+    },
+    lineItems,
+    subtotal: totals.subtotal,
+    taxTotal: totals.taxTotal,
+    total: totals.total,
+    notes: inv.notes ?? "",
+    invoiceNumber: inv.invoiceNumber ?? null,
+    year: inv.year ?? null,
+    sequence: inv.sequence ?? null,
+    projectId: inv.projectId ?? null,
+    paidAt: inv.paidAt ?? null,
+    createdBy: inv.createdBy ?? null,
+  };
+}
+
+/** Date used for dashboard revenue (paid date, else issue date). */
+export function invoiceRevenueDate(inv: Invoice): string | null {
+  if (inv.status !== "paid") return null;
+  return inv.paidAt || inv.issueDate || null;
+}
+
+/** Year-based number: 2026 → 26-0001 */
+export function formatInvoiceNumber(year: number, sequence: number) {
+  const yy = String(year).slice(-2);
+  const nnnn = String(sequence).padStart(4, "0");
+  return `${yy}-${nnnn}`;
+}
 
 /** @deprecated Use firm settings */
 export const revenueGoal2026 = defaultFirmSettings.revenueGoal;

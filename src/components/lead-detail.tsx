@@ -54,6 +54,7 @@ import { Select } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AttachmentsPanel } from "@/components/attachments-panel";
 import { LeadQuickActions } from "@/components/lead-quick-actions";
+import { GenerateEmailButton } from "@/components/generate-email-button";
 import { Markdown } from "@/components/markdown";
 import {
   DropdownMenu,
@@ -295,7 +296,10 @@ export function LeadDetail({
           />
         </div>
 
-        <LeadQuickActions leadId={lead.id} />
+        <div className="flex flex-wrap items-center gap-2">
+          <GenerateEmailButton leadId={lead.id} leadEmail={lead.email} />
+          <LeadQuickActions leadId={lead.id} />
+        </div>
 
         {/* Contact row */}
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">

@@ -27,6 +27,8 @@ import {
   portalApprovalsSeed,
   defaultFirmSettings,
   normalizeClient,
+  normalizeFirmSettings,
+  normalizeInvoice,
   normalizeLead,
   normalizeProject,
   normalizeTask,
@@ -41,6 +43,7 @@ import {
   type Doc,
   type FileLink,
   type FirmSettings,
+  type Invoice,
   type PortalUpdate,
   type PortalComment,
   type ProjectPhase,
@@ -135,6 +138,8 @@ const fileStore = {
   saveDocs: (d: Doc[]) => save("docs", d),
   getFirmSettings: () => load<FirmSettings>("settings", defaultFirmSettings),
   saveFirmSettings: (d: FirmSettings) => save("settings", d),
+  getInvoices: () => load<Invoice[]>("invoices", []),
+  saveInvoices: (d: Invoice[]) => save("invoices", d),
   getPortalUpdates: () =>
     load<PortalUpdate[]>("portal-updates", seedPortalUpdates),
   savePortalUpdates: (d: PortalUpdate[]) => save("portal-updates", d),
@@ -228,10 +233,17 @@ export async function saveDocs(d: Doc[]) {
   return (await backend()).saveDocs(d);
 }
 export async function getFirmSettings() {
-  return (await backend()).getFirmSettings();
+  return normalizeFirmSettings(await (await backend()).getFirmSettings());
 }
 export async function saveFirmSettings(d: FirmSettings) {
-  return (await backend()).saveFirmSettings(d);
+  return (await backend()).saveFirmSettings(normalizeFirmSettings(d));
+}
+export async function getInvoices() {
+  const rows = await (await backend()).getInvoices();
+  return rows.map(normalizeInvoice);
+}
+export async function saveInvoices(d: Invoice[]) {
+  return (await backend()).saveInvoices(d.map(normalizeInvoice));
 }
 export async function getPortalUpdates() {
   return (await backend()).getPortalUpdates();
@@ -338,6 +350,9 @@ export async function getProjectById(id: string) {
 }
 export async function getClientById(id: string) {
   return (await getClients()).find((c) => c.id === id);
+}
+export async function getInvoiceById(id: string) {
+  return (await getInvoices()).find((i) => i.id === id);
 }
 export async function getTicketById(id: string) {
   return (await getTickets()).find((t) => t.id === id);

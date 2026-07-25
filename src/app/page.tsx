@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/app-shell";
+import { DashboardRangeSelect } from "@/components/dashboard-range-select";
 import {
   Card,
   CardContent,
@@ -25,12 +26,27 @@ import { StatusPill } from "@/components/status-pill";
 import { StatCard } from "@/components/stat-card";
 import { RevenueAreaChart } from "@/components/charts";
 import { FollowUpRowActions } from "@/components/follow-up-row-actions";
+import { isArchived } from "@/lib/data";
 import {
-  isArchived,
-  monthlyRevenueFromPayments,
-  paidAmount,
-} from "@/lib/data";
-import { getLeads, getProjects, getTasks, getFirmSettings } from "@/lib/store";
+  dashboardRangeLabels,
+  isDateInRange,
+  leadActivityDate,
+  monthlyInvoiceRevenueInRange,
+  monthsSpanned,
+  outstandingInvoiceTotal,
+  paidInvoiceRevenueInRange,
+  parseDashboardRange,
+  rangeBounds,
+  revenueChartTitle,
+  revenueGranularity,
+} from "@/lib/dashboard-range";
+import {
+  getFirmSettings,
+  getInvoices,
+  getLeads,
+  getProjects,
+  getTasks,
+} from "@/lib/store";
 import { eur, fmtDate, dueState, leadStatusColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -43,31 +59,52 @@ function daysUntil(date: string) {
   return Math.round((d.getTime() - today.getTime()) / 86400000);
 }
 
-export default async function DashboardPage() {
-  const [leads, projects, tasks, settings] = await Promise.all([
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  const { range: rangeParam } = await searchParams;
+  const range = parseDashboardRange(rangeParam);
+  const bounds = rangeBounds(range);
+  const rangeLabel = dashboardRangeLabels[range];
+
+  const [leads, projects, tasks, settings, invoices] = await Promise.all([
     getLeads(),
     getProjects(),
     getTasks(),
     getFirmSettings(),
+    getInvoices(),
   ]);
-  const { revenueGoal, goalYear, firmName } = settings;
-  const monthlyRevenue = monthlyRevenueFromPayments(projects, goalYear);
+  const { revenueGoal, firmName } = settings;
+  const goalYear = new Date().getFullYear();
 
-  const newLeads = leads.filter((l) =>
+  const periodLeads = leads.filter((l) =>
+    isDateInRange(leadActivityDate(l), bounds)
+  );
+  const chartGranularity = revenueGranularity(bounds);
+  const monthlyRevenue = monthlyInvoiceRevenueInRange(invoices, bounds);
+
+  const newLeads = periodLeads.filter((l) =>
     ["New", "Researching", "Ready to contact"].includes(l.status)
   ).length;
-  const proposals = leads.filter((l) =>
+  const proposals = periodLeads.filter((l) =>
     ["Proposal sent", "Negotiating", "Won"].includes(l.status)
   ).length;
-  const won = leads.filter((l) => l.status === "Won").length;
-  const lost = leads.filter((l) => l.status === "Lost").length;
+  const won = periodLeads.filter((l) => l.status === "Won").length;
+  const lost = periodLeads.filter((l) => l.status === "Lost").length;
+  // Open pipeline stays current (not range-sliced) so the board stays useful
   const pipelineValue = leads
     .filter((l) => !["Won", "Lost", "Not suitable"].includes(l.status))
     .reduce((s, l) => s + l.value, 0);
-  const actualRevenue = projects.reduce((s, p) => s + paidAmount(p), 0);
+  const actualRevenue = paidInvoiceRevenueInRange(invoices, bounds);
+  const outstanding = outstandingInvoiceTotal(invoices);
   const conversionRate = Math.round((won / (won + lost || 1)) * 100);
   const pricedProjects = projects.filter(
-    (p) => !isArchived(p) && p.value > 0
+    (p) =>
+      !isArchived(p) &&
+      p.value > 0 &&
+      isDateInRange(p.start, bounds)
   );
   const avgProjectValue = pricedProjects.length
     ? Math.round(
@@ -100,24 +137,32 @@ export default async function DashboardPage() {
 
   const overdueTasks = openTasks.filter((t) => dueState(t.due) === "overdue");
 
-  const goalPct = Math.min(
-    100,
-    Math.round((actualRevenue / (revenueGoal || 1)) * 100)
-  );
+  const showGoal = range === "this_year" || range === "all";
+  const goalTarget =
+    range === "this_year" || range === "all" ? revenueGoal : actualRevenue;
+  const goalPct = showGoal
+    ? Math.min(100, Math.round((actualRevenue / (revenueGoal || 1)) * 100))
+    : 100;
   const projectsToGo =
-    avgProjectValue > 0
+    showGoal && avgProjectValue > 0
       ? Math.max(
           0,
           Math.ceil((revenueGoal - actualRevenue) / avgProjectValue)
         )
       : 0;
 
+  const monthlyPace = Math.round(
+    actualRevenue / Math.max(1, monthsSpanned(bounds))
+  );
+
   return (
     <div className="space-y-6 p-4 lg:p-6">
       <PageHeader
         title="Dashboard"
-        description={`${firmName} · what needs attention today and how ${goalYear} revenue is tracking.`}
-      />
+        description={`${firmName} · ${rangeLabel.toLowerCase()} · what needs attention and how revenue is tracking.`}
+      >
+        <DashboardRangeSelect value={range} />
+      </PageHeader>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
         <StatCard label="New leads" value={String(newLeads)} icon={Users} />
@@ -148,9 +193,9 @@ export default async function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Revenue by month</CardTitle>
+            <CardTitle>{revenueChartTitle(chartGranularity)}</CardTitle>
             <CardDescription>
-              From paid project installments in {goalYear}
+              Paid invoices · {rangeLabel.toLowerCase()}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -160,11 +205,17 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{goalYear} revenue goal</CardTitle>
+            <CardTitle>
+              {showGoal ? `${goalYear} revenue goal` : "Collected"}
+            </CardTitle>
             <CardDescription>
-              <Link href="/settings" className="hover:text-foreground">
-                {firmName} · edit in Settings
-              </Link>
+              {showGoal ? (
+                <Link href="/settings" className="hover:text-foreground">
+                  {firmName} · edit in Settings
+                </Link>
+              ) : (
+                rangeLabel
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -176,41 +227,58 @@ export default async function DashboardPage() {
                 <span className="app-display text-3xl italic tracking-tight">
                   {eur(actualRevenue)}
                 </span>
-                <span className="shrink-0 text-sm text-muted-foreground">
-                  / {eur(revenueGoal)}
-                </span>
+                {showGoal ? (
+                  <span className="shrink-0 text-sm text-muted-foreground">
+                    / {eur(goalTarget)}
+                  </span>
+                ) : null}
               </div>
-              <Progress
-                value={goalPct}
-                className="mt-4 h-1.5 bg-[color:var(--chart-1)]/15"
-                indicatorClassName="bg-[color:var(--chart-1)]"
-              />
-              <p className="mt-2 text-xs text-muted-foreground">
-                {goalPct}% reached ·{" "}
-                {eur(Math.max(0, revenueGoal - actualRevenue))} to go
-              </p>
+              {showGoal ? (
+                <>
+                  <Progress
+                    value={goalPct}
+                    className="mt-4 h-1.5 bg-[color:var(--chart-1)]/15"
+                    indicatorClassName="bg-[color:var(--chart-1)]"
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {goalPct}% reached ·{" "}
+                    {eur(Math.max(0, revenueGoal - actualRevenue))} to go
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  In selected period
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-border/70 pt-4">
+              <div>
+                <p className="text-[11px] tracking-[0.14em] uppercase text-muted-foreground">
+                  Outstanding
+                </p>
+                <p className="app-display mt-1 text-xl italic tracking-tight">
+                  {eur(outstanding)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Issued, unpaid
+                </p>
+              </div>
               <div>
                 <p className="text-[11px] tracking-[0.14em] uppercase text-muted-foreground">
                   Monthly pace
                 </p>
                 <p className="app-display mt-1 text-xl italic tracking-tight">
-                  {eur(
-                    Math.round(
-                      actualRevenue / Math.max(1, new Date().getMonth() + 1)
-                    )
-                  )}
+                  {eur(monthlyPace)}
                 </p>
               </div>
-              <div>
+              <div className="col-span-2">
                 <p className="text-[11px] tracking-[0.14em] uppercase text-muted-foreground">
                   Projects to go
                 </p>
                 <p className="app-display mt-1 text-xl italic tracking-tight">
-                  {avgProjectValue > 0 ? `~${projectsToGo}` : "—"}
+                  {showGoal && avgProjectValue > 0 ? `~${projectsToGo}` : "—"}
                 </p>
-                {avgProjectValue > 0 ? (
+                {showGoal && avgProjectValue > 0 ? (
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     avg {eur(avgProjectValue)}
                   </p>
@@ -226,8 +294,10 @@ export default async function DashboardPage() {
         <Card className="lg:col-span-2 overflow-hidden">
           <CardHeader className="flex-row items-start justify-between space-y-0">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="size-4 text-rose-500" />
+              <CardTitle className="flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <AlertCircle className="size-3.5" />
+                </span>
                 Needs a follow-up
               </CardTitle>
               <CardDescription>
@@ -329,8 +399,10 @@ export default async function DashboardPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Flame className="size-4 text-orange-500" />
+              <CardTitle className="flex items-center gap-2.5 text-base">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <Flame className="size-3.5" />
+                </span>
                 Hottest deals
               </CardTitle>
             </CardHeader>
@@ -363,8 +435,10 @@ export default async function DashboardPage() {
 
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CheckSquare className="size-4 text-muted-foreground" />
+              <CardTitle className="flex items-center gap-2.5 text-base">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <CheckSquare className="size-3.5" />
+                </span>
                 Open tasks
                 {overdueTasks.length > 0 && (
                   <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">

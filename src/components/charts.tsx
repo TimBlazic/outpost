@@ -30,8 +30,20 @@ const tooltipStyle = {
   color: "var(--popover-foreground)",
 };
 
+/** Compact axis ticks (legend/Y axis). */
 function eurTick(v: number) {
-  return v >= 1000 ? `€${v / 1000}k` : `€${v}`;
+  if (v >= 1000) return `€${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`;
+  return `€${v}`;
+}
+
+/** Full amount for tooltips — no “k” abbreviation. */
+function eurExact(v: number) {
+  return new Intl.NumberFormat("en-IE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(v);
 }
 
 export function RevenueAreaChart({
@@ -39,6 +51,7 @@ export function RevenueAreaChart({
 }: {
   data: { month: string; revenue: number }[];
 }) {
+  const dense = data.length > 8;
   return (
     <ResponsiveContainer width="100%" height={240}>
       <AreaChart data={data} margin={{ left: -16, right: 8, top: 8 }}>
@@ -49,11 +62,18 @@ export function RevenueAreaChart({
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="month" tick={axisStyle} tickLine={false} axisLine={false} />
+        <XAxis
+          dataKey="month"
+          tick={axisStyle}
+          tickLine={false}
+          axisLine={false}
+          interval={dense ? "preserveStartEnd" : 0}
+          minTickGap={dense ? 28 : 8}
+        />
         <YAxis tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={eurTick} />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(v) => [eurTick(Number(v)), "Revenue"]}
+          formatter={(v) => [eurExact(Number(v)), "Revenue"]}
           cursor={{ stroke: "var(--border)" }}
         />
         <Area
@@ -62,6 +82,8 @@ export function RevenueAreaChart({
           stroke="var(--chart-1)"
           strokeWidth={2}
           fill="url(#rev)"
+          dot={data.length <= 14 ? { r: 3, fill: "var(--chart-1)" } : false}
+          activeDot={{ r: 4 }}
         />
       </AreaChart>
     </ResponsiveContainer>
@@ -107,7 +129,7 @@ export function TypeBarChart({
         />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(v) => [eurTick(Number(v)), "Value"]}
+          formatter={(v) => [eurExact(Number(v)), "Value"]}
           cursor={{ fill: "var(--muted)" }}
         />
         <Bar dataKey="value" fill="var(--chart-1)" radius={[0, 4, 4, 0]} barSize={18} />

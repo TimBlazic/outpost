@@ -3,8 +3,12 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil, Plus } from "lucide-react";
 
 import { deleteClient } from "@/lib/actions";
-import { getClientById, getProjectsForClient } from "@/lib/store";
-import { isArchived } from "@/lib/data";
+import {
+  getClientById,
+  getInvoices,
+  getProjectsForClient,
+} from "@/lib/store";
+import { isArchived, type Invoice } from "@/lib/data";
 import { eur, fmtDate, projectStatusColor } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/status-pill";
@@ -20,8 +24,24 @@ import {
 } from "@/components/ui/table";
 import { DataTable } from "@/components/data-table";
 import { ClickableRow } from "@/components/clickable-row";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+const invoiceStatusColor: Record<Invoice["status"], string> = {
+  draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  issued: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  paid: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  void: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+};
+
+function invoiceMoney(currency: string, n: number) {
+  return new Intl.NumberFormat("en-IE", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
 
 export default async function ClientDetailPage({
   params,
@@ -32,7 +52,15 @@ export default async function ClientDetailPage({
   const client = await getClientById(id);
   if (!client) notFound();
 
-  const projects = await getProjectsForClient(id);
+  const [projects, allInvoices] = await Promise.all([
+    getProjectsForClient(id),
+    getInvoices(),
+  ]);
+  const invoices = allInvoices
+    .filter((inv) => inv.clientId === id)
+    .sort((a, b) =>
+      a.issueDate < b.issueDate ? 1 : a.issueDate > b.issueDate ? -1 : 0
+    );
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">
@@ -214,6 +242,67 @@ export default async function ClientDetailPage({
                     <TableCell className="text-sm">{eur(p.value)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {fmtDate(p.actualEnd ?? p.estimatedEnd)}
+                    </TableCell>
+                  </ClickableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </DataTable>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">
+            Invoices{" "}
+            <span className="font-normal text-muted-foreground">
+              ({invoices.length})
+            </span>
+          </h2>
+          <Button size="sm" variant="outline" asChild>
+            <Link href={`/invoices/new?clientId=${client.id}`}>
+              <Plus className="size-3.5" />
+              New invoice
+            </Link>
+          </Button>
+        </div>
+
+        {invoices.length === 0 ? (
+          <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+            No invoices for this client yet.
+          </p>
+        ) : (
+          <DataTable>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Number</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Issue</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.map((inv) => (
+                  <ClickableRow key={inv.id} href={`/invoices/${inv.id}`}>
+                    <TableCell className="font-medium">
+                      {inv.invoiceNumber ?? "Draft"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill
+                        label={inv.status}
+                        className={cn(invoiceStatusColor[inv.status])}
+                      />
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {fmtDate(inv.issueDate)}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {fmtDate(inv.dueDate)}
+                    </TableCell>
+                    <TableCell className="text-right text-sm tabular-nums">
+                      {invoiceMoney(inv.currency, inv.total)}
                     </TableCell>
                   </ClickableRow>
                 ))}

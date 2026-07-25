@@ -778,6 +778,11 @@ async function ensureClientForProject(input: {
     leadId: lead?.id,
     createdAt: new Date().toISOString(),
     archivedAt: null,
+    billingAddress: "",
+    taxNumber: "",
+    vatId: "",
+    registrationNumber: "",
+    paymentTermsDays: null,
   };
   await saveClients([client, ...clients]);
   return client;
@@ -1119,7 +1124,11 @@ export async function toggleDocFavorite(id: string) {
 // ---- Firm settings --------------------------------------------------------
 
 export async function updateFirmSettings(settings: FirmSettings) {
-  await saveFirmSettings(settings);
+  await saveFirmSettings({
+    ...settings,
+    // Goal always tracks the calendar year — no manual year field.
+    goalYear: new Date().getFullYear(),
+  });
   revalidatePath("/");
   revalidatePath("/settings");
 }
@@ -1135,15 +1144,32 @@ export type ClientInput = {
   country: string;
   notes: string;
   leadId?: string;
+  billingAddress?: string;
+  taxNumber?: string;
+  vatId?: string;
+  registrationNumber?: string;
+  paymentTermsDays?: number | null;
 };
 
 export async function createClient(input: ClientInput) {
   const clients = await getClients();
   const client: Client = {
     id: uid("c"),
-    ...input,
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    company: input.company,
+    website: input.website,
+    country: input.country,
+    notes: input.notes,
+    leadId: input.leadId,
     createdAt: new Date().toISOString(),
     archivedAt: null,
+    billingAddress: input.billingAddress ?? "",
+    taxNumber: input.taxNumber ?? "",
+    vatId: input.vatId ?? "",
+    registrationNumber: input.registrationNumber ?? "",
+    paymentTermsDays: input.paymentTermsDays ?? null,
   };
   await saveClients([client, ...clients]);
   revalidatePath("/clients");
@@ -1199,7 +1225,30 @@ export async function restoreProject(id: string) {
 export async function updateClient(id: string, input: ClientInput) {
   const clients = await getClients();
   await saveClients(
-    clients.map((c) => (c.id === id ? { ...c, ...input } : c))
+    clients.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            company: input.company,
+            website: input.website,
+            country: input.country,
+            notes: input.notes,
+            leadId: input.leadId ?? c.leadId,
+            billingAddress: input.billingAddress ?? c.billingAddress ?? "",
+            taxNumber: input.taxNumber ?? c.taxNumber ?? "",
+            vatId: input.vatId ?? c.vatId ?? "",
+            registrationNumber:
+              input.registrationNumber ?? c.registrationNumber ?? "",
+            paymentTermsDays:
+              input.paymentTermsDays !== undefined
+                ? input.paymentTermsDays
+                : c.paymentTermsDays,
+          }
+        : c
+    )
   );
   // Keep denormalized project.client in sync
   const projects = await getProjects();

@@ -5,19 +5,9 @@ import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { ArchiveTabs } from "@/components/archive-tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ClickableRow } from "@/components/clickable-row";
-import { DataTable } from "@/components/data-table";
+import { ClientsTable } from "@/components/clients-table";
 import { isArchived } from "@/lib/data";
 import { getClients, getProjects } from "@/lib/store";
-import { fmtDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -33,14 +23,15 @@ export default async function ClientsPage({
   const archivedClients = clients.filter((c) => isArchived(c));
   const shown = view === "archived" ? archivedClients : activeClients;
 
-  const countByClient = new Map<string, number>();
+  const projectCountByClient: Record<string, number> = {};
   for (const p of projects) {
     if (!p.clientId || isArchived(p)) continue;
-    countByClient.set(p.clientId, (countByClient.get(p.clientId) ?? 0) + 1);
+    projectCountByClient[p.clientId] =
+      (projectCountByClient[p.clientId] ?? 0) + 1;
   }
 
   return (
-    <div className="space-y-6 p-4 lg:p-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4 lg:p-6">
       <PageHeader
         title="Clients"
         description={`${activeClients.length} active · ${archivedClients.length} archived`}
@@ -53,12 +44,14 @@ export default async function ClientsPage({
         </Button>
       </PageHeader>
 
-      <ArchiveTabs
-        basePath="/clients"
-        view={view}
-        activeCount={activeClients.length}
-        archivedCount={archivedClients.length}
-      />
+      <div className="shrink-0">
+        <ArchiveTabs
+          basePath="/clients"
+          view={view}
+          activeCount={activeClients.length}
+          archivedCount={archivedClients.length}
+        />
+      </div>
 
       {shown.length === 0 ? (
         <EmptyState
@@ -73,39 +66,10 @@ export default async function ClientsPage({
           actionHref={view === "archived" ? undefined : "/clients/new"}
         />
       ) : (
-        <DataTable>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Projects</TableHead>
-                <TableHead>Added</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {shown.map((c) => (
-                <ClickableRow key={c.id} href={`/clients/${c.id}`}>
-                  <TableCell>
-                    <span className="font-medium">{c.name}</span>
-                    {c.company && c.company !== c.name && (
-                      <p className="text-xs text-muted-foreground">{c.company}</p>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {c.email || "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {countByClient.get(c.id) ?? 0}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {fmtDate(c.createdAt)}
-                  </TableCell>
-                </ClickableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </DataTable>
+        <ClientsTable
+          clients={shown}
+          projectCountByClient={projectCountByClient}
+        />
       )}
     </div>
   );
