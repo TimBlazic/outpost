@@ -1,65 +1,422 @@
-import Image from "next/image";
+import Link from "next/link";
+import {
+  ArrowUpRight,
+  TrendingUp,
+  Users,
+  Send,
+  Trophy,
+  Target,
+  AlertCircle,
+  CalendarClock,
+  CheckSquare,
+  Flame,
+} from "lucide-react";
 
-export default function Home() {
+import { PageHeader } from "@/components/app-shell";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { StatusPill } from "@/components/status-pill";
+import { StatCard } from "@/components/stat-card";
+import { RevenueAreaChart } from "@/components/charts";
+import { FollowUpRowActions } from "@/components/follow-up-row-actions";
+import {
+  isArchived,
+  monthlyRevenueFromPayments,
+  paidAmount,
+} from "@/lib/data";
+import { getLeads, getProjects, getTasks, getFirmSettings } from "@/lib/store";
+import { eur, fmtDate, dueState, leadStatusColor } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
+
+function daysUntil(date: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(date + "T00:00:00");
+  return Math.round((d.getTime() - today.getTime()) / 86400000);
+}
+
+export default async function DashboardPage() {
+  const [leads, projects, tasks, settings] = await Promise.all([
+    getLeads(),
+    getProjects(),
+    getTasks(),
+    getFirmSettings(),
+  ]);
+  const { revenueGoal, goalYear, firmName } = settings;
+  const monthlyRevenue = monthlyRevenueFromPayments(projects, goalYear);
+
+  const newLeads = leads.filter((l) =>
+    ["New", "Researching", "Ready to contact"].includes(l.status)
+  ).length;
+  const proposals = leads.filter((l) =>
+    ["Proposal sent", "Negotiating", "Won"].includes(l.status)
+  ).length;
+  const won = leads.filter((l) => l.status === "Won").length;
+  const lost = leads.filter((l) => l.status === "Lost").length;
+  const pipelineValue = leads
+    .filter((l) => !["Won", "Lost", "Not suitable"].includes(l.status))
+    .reduce((s, l) => s + l.value, 0);
+  const actualRevenue = projects.reduce((s, p) => s + paidAmount(p), 0);
+  const conversionRate = Math.round((won / (won + lost || 1)) * 100);
+  const pricedProjects = projects.filter(
+    (p) => !isArchived(p) && p.value > 0
+  );
+  const avgProjectValue = pricedProjects.length
+    ? Math.round(
+        pricedProjects.reduce((s, p) => s + p.value, 0) / pricedProjects.length
+      )
+    : 0;
+
+  const overdueFollowUps = leads
+    .filter((l) => l.nextFollowUp && dueState(l.nextFollowUp) === "overdue")
+    .sort((a, b) => (a.nextFollowUp! < b.nextFollowUp! ? -1 : 1));
+
+  const dueSoon = leads
+    .filter((l) => {
+      if (!l.nextFollowUp) return false;
+      const state = dueState(l.nextFollowUp);
+      return state === "today" || state === "soon";
+    })
+    .sort((a, b) => (a.nextFollowUp! < b.nextFollowUp! ? -1 : 1))
+    .slice(0, 6);
+
+  const hotLeads = [...leads]
+    .filter((l) => !["Won", "Lost", "Not suitable"].includes(l.status))
+    .sort((a, b) => b.value * b.probability - a.value * a.probability)
+    .slice(0, 5);
+
+  const openTasks = tasks
+    .filter((t) => t.status !== "Done")
+    .sort((a, b) => (a.due < b.due ? -1 : 1))
+    .slice(0, 6);
+
+  const overdueTasks = openTasks.filter((t) => dueState(t.due) === "overdue");
+
+  const goalPct = Math.min(
+    100,
+    Math.round((actualRevenue / (revenueGoal || 1)) * 100)
+  );
+  const projectsToGo =
+    avgProjectValue > 0
+      ? Math.max(
+          0,
+          Math.ceil((revenueGoal - actualRevenue) / avgProjectValue)
+        )
+      : 0;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="space-y-6 p-4 lg:p-6">
+      <PageHeader
+        title="Dashboard"
+        description={`${firmName} · what needs attention today and how ${goalYear} revenue is tracking.`}
+      />
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard label="New leads" value={String(newLeads)} icon={Users} />
+        <StatCard
+          label="Proposals sent"
+          value={String(proposals)}
+          icon={Send}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+        <StatCard
+          label="Won"
+          value={String(won)}
+          sub={`${lost} lost`}
+          icon={Trophy}
+        />
+        <StatCard
+          label="Pipeline value"
+          value={eur(pipelineValue)}
+          icon={TrendingUp}
+        />
+        <StatCard
+          label="Conversion"
+          value={`${conversionRate}%`}
+          sub="won / closed"
+          icon={Target}
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Revenue by month</CardTitle>
+            <CardDescription>
+              From paid project installments in {goalYear}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RevenueAreaChart data={monthlyRevenue} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{goalYear} revenue goal</CardTitle>
+            <CardDescription>
+              <Link href="/settings" className="hover:text-foreground">
+                {firmName} · edit in Settings
+              </Link>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div>
+              <p className="text-[11px] tracking-[0.14em] uppercase text-muted-foreground">
+                Collected
+              </p>
+              <div className="mt-1 flex items-baseline justify-between gap-3">
+                <span className="app-display text-3xl italic tracking-tight">
+                  {eur(actualRevenue)}
+                </span>
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  / {eur(revenueGoal)}
+                </span>
+              </div>
+              <Progress
+                value={goalPct}
+                className="mt-4 h-1.5 bg-[color:var(--chart-1)]/15"
+                indicatorClassName="bg-[color:var(--chart-1)]"
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {goalPct}% reached ·{" "}
+                {eur(Math.max(0, revenueGoal - actualRevenue))} to go
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-border/70 pt-4">
+              <div>
+                <p className="text-[11px] tracking-[0.14em] uppercase text-muted-foreground">
+                  Monthly pace
+                </p>
+                <p className="app-display mt-1 text-xl italic tracking-tight">
+                  {eur(
+                    Math.round(
+                      actualRevenue / Math.max(1, new Date().getMonth() + 1)
+                    )
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] tracking-[0.14em] uppercase text-muted-foreground">
+                  Projects to go
+                </p>
+                <p className="app-display mt-1 text-xl italic tracking-tight">
+                  {avgProjectValue > 0 ? `~${projectsToGo}` : "—"}
+                </p>
+                {avgProjectValue > 0 ? (
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    avg {eur(avgProjectValue)}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Action board */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2 overflow-hidden">
+          <CardHeader className="flex-row items-start justify-between space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="size-4 text-rose-500" />
+                Needs a follow-up
+              </CardTitle>
+              <CardDescription>
+                Overdue first, then what&apos;s due in the next 7 days
+              </CardDescription>
+            </div>
+            <Link
+              href="/leads"
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              All leads <ArrowUpRight className="size-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            {overdueFollowUps.length === 0 && dueSoon.length === 0 ? (
+              <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+                Inbox zero — nothing waiting on you.
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {overdueFollowUps.map((l) => {
+                  const days = Math.abs(daysUntil(l.nextFollowUp!));
+                  return (
+                    <li key={l.id}>
+                      <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-rose-50/60 sm:gap-4 sm:px-6 sm:py-3.5">
+                        <Link
+                          href={`/leads/${l.id}`}
+                          className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4"
+                        >
+                          <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-rose-100 text-rose-700">
+                            <span className="text-sm font-semibold leading-none">
+                              {days}
+                            </span>
+                            <span className="text-[10px] leading-tight">
+                              {days === 1 ? "day" : "days"}
+                            </span>
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {l.company}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {l.contact}
+                            </p>
+                          </div>
+                          <StatusPill
+                            label={l.status}
+                            className={cn(
+                              "hidden sm:inline-flex",
+                              leadStatusColor[l.status]
+                            )}
+                          />
+                        </Link>
+                        <FollowUpRowActions leadId={l.id} />
+                      </div>
+                    </li>
+                  );
+                })}
+                {dueSoon.map((l) => {
+                  const days = daysUntil(l.nextFollowUp!);
+                  const isToday = days === 0;
+                  return (
+                    <li key={l.id}>
+                      <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:gap-4 sm:px-6 sm:py-3.5">
+                        <Link
+                          href={`/leads/${l.id}`}
+                          className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4"
+                        >
+                          <span
+                            className={cn(
+                              "flex size-10 shrink-0 flex-col items-center justify-center rounded-lg",
+                              isToday
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            <CalendarClock className="size-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {l.company}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {isToday ? "today" : fmtDate(l.nextFollowUp)} ·{" "}
+                              {l.contact}
+                            </p>
+                          </div>
+                        </Link>
+                        <FollowUpRowActions leadId={l.id} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Flame className="size-4 text-orange-500" />
+                Hottest deals
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 p-2 pt-0">
+              {hotLeads.map((l, i) => (
+                <Link
+                  key={l.id}
+                  href={`/leads/${l.id}`}
+                  className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
+                >
+                  <span className="w-4 text-xs text-muted-foreground">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{l.company}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {l.probability}% · {l.status}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold">{eur(l.value)}</span>
+                </Link>
+              ))}
+              {hotLeads.length === 0 && (
+                <p className="px-2 py-6 text-center text-sm text-muted-foreground">
+                  No open deals yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CheckSquare className="size-4 text-muted-foreground" />
+                Open tasks
+                {overdueTasks.length > 0 && (
+                  <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                    {overdueTasks.length} overdue
+                  </span>
+                )}
+              </CardTitle>
+              <Link
+                href="/tasks"
+                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                View all
+              </Link>
+            </CardHeader>
+            <CardContent className="space-y-1 p-2 pt-0">
+              {openTasks.map((t) => {
+                const state = dueState(t.due);
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 rounded-md px-2 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{t.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t.priority}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        state === "overdue" && "font-medium text-rose-600",
+                        state === "today" && "font-medium text-amber-600",
+                        state !== "overdue" &&
+                          state !== "today" &&
+                          "text-muted-foreground"
+                      )}
+                    >
+                      {fmtDate(t.due)}
+                    </span>
+                  </div>
+                );
+              })}
+              {openTasks.length === 0 && (
+                <p className="px-2 py-6 text-center text-sm text-muted-foreground">
+                  No open tasks.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }

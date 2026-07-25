@@ -1,0 +1,724 @@
+"use client";
+
+import Link from "next/link";
+import { useState, useTransition } from "react";
+import {
+  ArrowLeft,
+  Globe,
+  Mail,
+  Phone,
+  Pin,
+  PinOff,
+  Plus,
+  Trash2,
+  FileText,
+  CircleDot,
+  Send,
+  MessageCircle,
+  CalendarCheck,
+  StickyNote,
+  PhoneCall,
+  Pencil,
+  MoreHorizontal,
+  ExternalLink,
+  CalendarClock,
+  Copy,
+  Check,
+} from "lucide-react";
+
+import {
+  type Lead,
+  type Activity,
+  type Note,
+  type Attachment,
+  type LeadStatus,
+  type ActivityType,
+  leadStatuses,
+} from "@/lib/data";
+import {
+  setLeadStatus,
+  deleteLead,
+  addNote,
+  updateNote,
+  toggleNotePin,
+  deleteNote,
+  addActivity,
+} from "@/lib/actions";
+import { eur, fmtDate, fmtDateLong, leadStatusColor, dueState } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AttachmentsPanel } from "@/components/attachments-panel";
+import { LeadQuickActions } from "@/components/lead-quick-actions";
+import { Markdown } from "@/components/markdown";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const activityIcon: Record<ActivityType, React.ElementType> = {
+  status: CircleDot,
+  email: Send,
+  reply: MessageCircle,
+  meeting: CalendarCheck,
+  proposal: FileText,
+  note: StickyNote,
+  call: PhoneCall,
+};
+
+const activityOptions: ActivityType[] = [
+  "email",
+  "reply",
+  "call",
+  "meeting",
+  "proposal",
+  "note",
+];
+
+function websiteHref(site: string) {
+  if (!site) return null;
+  return site.startsWith("http") ? site : `https://${site}`;
+}
+
+/** Plain-text brief for pasting into ChatGPT / email drafts. */
+export function formatLeadBrief(lead: Lead) {
+  const site = websiteHref(lead.website);
+  const lines: string[] = [
+    `Company: ${lead.company}`,
+    lead.contact ? `Contact: ${lead.contact}` : "",
+    lead.email ? `Email: ${lead.email}` : "",
+    lead.phone ? `Phone: ${lead.phone}` : "",
+    site ? `Website: ${site}` : "",
+    lead.country ? `Country: ${lead.country}` : "",
+    lead.category ? `Category: ${lead.category}` : "",
+    lead.value > 0 ? `Estimated budget / value: ${eur(lead.value)}` : "",
+    lead.tags.length ? `Tags: ${lead.tags.join(", ")}` : "",
+  ].filter(Boolean);
+
+  if (lead.description?.trim()) {
+    lines.push("", "Notes / research:", lead.description.trim());
+  }
+
+  return lines.join("\n");
+}
+
+function CopyLeadBriefButton({ lead }: { lead: Lead }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    const text = formatLeadBrief(lead);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  return (
+    <Button type="button" variant="outline" onClick={copy}>
+      {copied ? (
+        <>
+          <Check className="size-4" /> Copied
+        </>
+      ) : (
+        <>
+          <Copy className="size-4" /> Copy for AI
+        </>
+      )}
+    </Button>
+  );
+}
+
+export function LeadDetail({
+  lead,
+  activities,
+  notes: rawNotes,
+  files,
+}: {
+  lead: Lead;
+  activities: Activity[];
+  notes: Note[];
+  files: Attachment[];
+}) {
+  const [pending, startTransition] = useTransition();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const notes = [...rawNotes].sort(
+    (a, b) => Number(b.pinned) - Number(a.pinned)
+  );
+  const followUpState = lead.nextFollowUp
+    ? dueState(lead.nextFollowUp)
+    : null;
+  const site = websiteHref(lead.website);
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">
+      <Link
+        href="/leads"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" /> Leads
+      </Link>
+
+      {/* Header */}
+      <header className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                aria-label="Change status"
+                className={cn(
+                  "h-8 w-[180px] border-0 font-medium shadow-none",
+                  leadStatusColor[lead.status]
+                )}
+                value={lead.status}
+                disabled={pending}
+                onChange={(e) =>
+                  startTransition(() =>
+                    setLeadStatus(lead.id, e.target.value as LeadStatus)
+                  )
+                }
+              >
+                {leadStatuses.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+              {lead.tags.map((t) => (
+                <Badge key={t} variant="secondary" className="font-normal">
+                  {t}
+                </Badge>
+              ))}
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight">
+              {lead.company}
+            </h1>
+            <p className="text-muted-foreground">
+              {lead.contact}
+              {lead.category ? ` · ${lead.category}` : ""}
+              {lead.country ? ` · ${lead.country}` : ""}
+              {lead.source ? ` · via ${lead.source}` : ""}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyLeadBriefButton lead={lead} />
+            <Button variant="outline" asChild>
+              <Link href={`/leads/${lead.id}/edit`}>
+                <Pencil className="size-4" /> Edit
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href={`/projects/new?leadId=${lead.id}`}>
+                Convert to project
+              </Link>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="More actions">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {lead.email && (
+                  <DropdownMenuItem asChild>
+                    <a href={`mailto:${lead.email}`}>Send email</a>
+                  </DropdownMenuItem>
+                )}
+                {site && (
+                  <DropdownMenuItem asChild>
+                    <a href={site} target="_blank" rel="noreferrer">
+                      Open website
+                    </a>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem asChild>
+                  <Link href={`/tasks?new=1&leadId=${lead.id}`}>New task</Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="size-4" /> Delete lead
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Quick facts strip — not cards */}
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-4">
+          <Fact
+            label="Deal value"
+            value={eur(lead.value)}
+            emphasis
+          />
+          <Fact label="Win prob." value={`${lead.probability}%`} />
+          <Fact
+            label="Next follow-up"
+            value={lead.nextFollowUp ? fmtDate(lead.nextFollowUp) : "—"}
+            tone={
+              followUpState === "overdue"
+                ? "danger"
+                : followUpState === "today"
+                  ? "warn"
+                  : undefined
+            }
+            icon={CalendarClock}
+          />
+          <Fact
+            label="Last contact"
+            value={lead.lastContact ? fmtDate(lead.lastContact) : "—"}
+          />
+        </div>
+
+        <LeadQuickActions leadId={lead.id} />
+
+        {/* Contact row */}
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          {site && (
+            <a
+              href={site}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Globe className="size-3.5" />
+              {lead.website}
+              <ExternalLink className="size-3 opacity-50" />
+            </a>
+          )}
+          {lead.email && (
+            <a
+              href={`mailto:${lead.email}`}
+              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Mail className="size-3.5" />
+              {lead.email}
+            </a>
+          )}
+          {lead.phone && (
+            <a
+              href={`tel:${lead.phone}`}
+              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Phone className="size-3.5" />
+              {lead.phone}
+            </a>
+          )}
+        </div>
+
+        {lead.description?.trim() ? (
+          <div className="rounded-xl border border-border/70 bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+            <p className="mb-2 text-[11px] tracking-[0.14em] uppercase text-muted-foreground">
+              Description
+            </p>
+            <Markdown source={lead.description} />
+          </div>
+        ) : null}
+      </header>
+
+      {/* Main workspace */}
+      <Tabs defaultValue="timeline" className="gap-5">
+        <TabsList>
+          <TabsTrigger value="timeline">
+            Activity ({activities.length})
+          </TabsTrigger>
+          <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
+          <TabsTrigger value="files">Files ({files.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="timeline">
+          <ActivityPanel leadId={lead.id} activities={activities} />
+        </TabsContent>
+
+        <TabsContent value="notes" className="space-y-3">
+          <NotesPanel leadId={lead.id} notes={notes} />
+        </TabsContent>
+
+        <TabsContent value="files">
+          <AttachmentsPanel
+            parentType="lead"
+            parentId={lead.id}
+            items={files}
+          />
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete lead?</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{lead.company}&quot; and related notes, activities,
+              and files? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  await deleteLead(lead.id);
+                })
+              }
+            >
+              {pending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function Fact({
+  label,
+  value,
+  emphasis,
+  tone,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+  tone?: "danger" | "warn";
+  icon?: React.ElementType;
+}) {
+  return (
+    <div className="bg-background px-4 py-3.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 flex items-center gap-1.5 font-semibold tracking-tight",
+          emphasis && "text-lg",
+          tone === "danger" && "text-rose-600",
+          tone === "warn" && "text-amber-600"
+        )}
+      >
+        {Icon && <Icon className="size-3.5 opacity-70" />}
+        {value}
+      </p>
+    </div>
+  );
+}
+
+// ---- Activity --------------------------------------------------------------
+
+function ActivityPanel({
+  leadId,
+  activities,
+}: {
+  leadId: string;
+  activities: Activity[];
+}) {
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<ActivityType>("email");
+  const [title, setTitle] = useState("");
+  const [detail, setDetail] = useState("");
+
+  function submit() {
+    if (!title.trim()) return;
+    startTransition(async () => {
+      await addActivity(leadId, { type, title: title.trim(), detail });
+      setTitle("");
+      setDetail("");
+      setOpen(false);
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Everything that happened with this lead
+        </p>
+        <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}>
+          <Plus className="size-4" /> Log activity
+        </Button>
+      </div>
+
+      {open && (
+        <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+          <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+            <Select
+              value={type}
+              onChange={(e) => setType(e.target.value as ActivityType)}
+              className="h-9"
+            >
+              {activityOptions.map((t) => (
+                <option key={t} value={t} className="capitalize">
+                  {t}
+                </option>
+              ))}
+            </Select>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Sent proposal v2"
+              className="h-9"
+            />
+          </div>
+          <Textarea
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            placeholder="Optional details…"
+            rows={2}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={submit} disabled={pending}>
+              Add
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <ol className="relative space-y-0 border-l border-border/80 pl-6">
+        {activities.map((a) => {
+          const Icon = activityIcon[a.type];
+          return (
+            <li key={a.id} className="relative pb-6 last:pb-0">
+              <span className="absolute -left-[31px] flex size-6 items-center justify-center rounded-full border bg-background text-muted-foreground">
+                <Icon className="size-3.5" />
+              </span>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-sm font-medium">{a.title}</p>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {fmtDateLong(a.date)}
+                </span>
+              </div>
+              {a.detail && (
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {a.detail}
+                </p>
+              )}
+            </li>
+          );
+        })}
+        {activities.length === 0 && (
+          <li className="text-sm text-muted-foreground">
+            No activity logged yet. Log emails, calls, and meetings as you go.
+          </li>
+        )}
+      </ol>
+    </div>
+  );
+}
+
+// ---- Notes -----------------------------------------------------------------
+
+function NotesPanel({ leadId, notes }: { leadId: string; notes: Note[] }) {
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [pinned, setPinned] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+
+  function submit() {
+    if (!title.trim() && !body.trim()) return;
+    startTransition(async () => {
+      await addNote(leadId, { title: title.trim(), body: body.trim(), pinned });
+      setTitle("");
+      setBody("");
+      setPinned(false);
+      setOpen(false);
+    });
+  }
+
+  function startEdit(n: Note) {
+    setEditingId(n.id);
+    setEditTitle(n.title);
+    setEditBody(n.body);
+  }
+
+  function saveEdit() {
+    if (!editingId) return;
+    if (!editTitle.trim() && !editBody.trim()) return;
+    startTransition(async () => {
+      await updateNote(editingId, leadId, {
+        title: editTitle.trim(),
+        body: editBody.trim(),
+      });
+      setEditingId(null);
+    });
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Scratchpad for research, scope, and call notes
+        </p>
+        <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}>
+          <Plus className="size-4" /> New note
+        </Button>
+      </div>
+
+      {open && (
+        <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Note title"
+          />
+          <Textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Write your note…"
+            rows={3}
+          />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={pinned}
+                onChange={(e) => setPinned(e.target.checked)}
+              />
+              Pin this note
+            </label>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={submit} disabled={pending}>
+                Add note
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="divide-y rounded-xl border">
+        {notes.map((n) => (
+          <div
+            key={n.id}
+            className={cn(
+              "space-y-2 p-4",
+              n.pinned && "bg-amber-50/40"
+            )}
+          >
+            {editingId === n.id ? (
+              <>
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Note title"
+                />
+                <Textarea
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  placeholder="Write your note…"
+                  rows={3}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingId(null)}
+                    disabled={pending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={saveEdit} disabled={pending}>
+                    Save
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="flex items-center gap-1.5 text-sm font-medium">
+                    {n.pinned && (
+                      <Pin className="size-3.5 fill-amber-400 text-amber-500" />
+                    )}
+                    {n.title}
+                  </h3>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="mr-1 text-xs text-muted-foreground">
+                      {fmtDateLong(n.date)}
+                    </span>
+                    <button
+                      aria-label="Edit note"
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() => startEdit(n)}
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
+                      aria-label={n.pinned ? "Unpin" : "Pin"}
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() =>
+                        startTransition(() => toggleNotePin(n.id, leadId))
+                      }
+                    >
+                      {n.pinned ? (
+                        <PinOff className="size-3.5" />
+                      ) : (
+                        <Pin className="size-3.5" />
+                      )}
+                    </button>
+                    <button
+                      aria-label="Delete note"
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                      onClick={() =>
+                        startTransition(() => deleteNote(n.id, leadId))
+                      }
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {n.body}
+                </p>
+              </>
+            )}
+          </div>
+        ))}
+        {notes.length === 0 && !open && (
+          <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+            No notes yet.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}

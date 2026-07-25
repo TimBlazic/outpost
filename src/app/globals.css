@@ -1,26 +1,203 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* Editorial brand — shared with client portal (warm ink on cream / night) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.55rem;
+  --background: #f7f4ee;
+  --foreground: #171614;
+  --card: #fffcf7;
+  --card-foreground: #171614;
+  --popover: #fffcf7;
+  --popover-foreground: #171614;
+  --primary: #1c1b19;
+  --primary-foreground: #f7f4ee;
+  --secondary: #efebe3;
+  --secondary-foreground: #171614;
+  --muted: #efebe3;
+  --muted-foreground: #6f6a60;
+  --accent: #ebe6db;
+  --accent-foreground: #171614;
+  --destructive: #b42318;
+  --border: rgb(23 22 20 / 12%);
+  --input: rgb(23 22 20 / 14%);
+  --ring: rgb(23 22 20 / 28%);
+  --chart-1: #3d5a4c;
+  --chart-2: #8b7355;
+  --chart-3: #1c1b19;
+  --chart-4: #6f6a60;
+  --chart-5: #a67c52;
+  --sidebar: #f3efe6;
+  --sidebar-foreground: #171614;
+  --sidebar-primary: #1c1b19;
+  --sidebar-primary-foreground: #f7f4ee;
+  --sidebar-accent: #ebe6db;
+  --sidebar-accent-foreground: #171614;
+  --sidebar-border: rgb(23 22 20 / 10%);
+  --sidebar-ring: rgb(23 22 20 / 28%);
+  --app-atmosphere:
+    radial-gradient(1200px 600px at 12% -12%, rgb(40 60 50 / 6%), transparent 55%),
+    radial-gradient(900px 480px at 90% 0%, rgb(180 150 100 / 8%), transparent 50%);
+}
+
+.dark {
+  --background: #0c0c0b;
+  --foreground: #f2efe8;
+  --card: #141312;
+  --card-foreground: #f2efe8;
+  --popover: #141312;
+  --popover-foreground: #f2efe8;
+  --primary: #e8e2d4;
+  --primary-foreground: #0c0c0b;
+  --secondary: #1a1917;
+  --secondary-foreground: #f2efe8;
+  --muted: #1a1917;
+  --muted-foreground: #9a958a;
+  --accent: #1f1e1b;
+  --accent-foreground: #f2efe8;
+  --destructive: #f97066;
+  --border: rgb(242 239 232 / 12%);
+  --input: rgb(242 239 232 / 14%);
+  --ring: rgb(242 239 232 / 28%);
+  --chart-1: #a8c4b4;
+  --chart-2: #d4b896;
+  --chart-3: #e8e2d4;
+  --chart-4: #9a958a;
+  --chart-5: #c4a574;
+  --sidebar: #0f0e0d;
+  --sidebar-foreground: #f2efe8;
+  --sidebar-primary: #e8e2d4;
+  --sidebar-primary-foreground: #0c0c0b;
+  --sidebar-accent: #1a1917;
+  --sidebar-accent-foreground: #f2efe8;
+  --sidebar-border: rgb(242 239 232 / 10%);
+  --sidebar-ring: rgb(242 239 232 / 28%);
+  --app-atmosphere:
+    radial-gradient(1200px 600px at 10% -10%, rgb(232 226 212 / 8%), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgb(120 140 120 / 6%), transparent 50%);
 }
 
 @theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: var(--font-dm-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-instrument);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+  }
+  body {
+    background-color: var(--background);
+    background-image: var(--app-atmosphere);
+    background-attachment: fixed;
+    color: var(--foreground);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.app-display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+}
+
+/* Client portal — same editorial skin */
+.portal-skin {
+  --portal-bg: #0c0c0b;
+  --portal-fg: #f2efe8;
+  --portal-muted: #9a958a;
+  --portal-line: rgb(242 239 232 / 12%);
+  --portal-accent: #e8e2d4;
+  --portal-surface: rgb(242 239 232 / 4%);
+  --font-portal-display: var(--font-instrument);
+  --font-portal-sans: var(--font-dm-sans);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgb(232 226 212 / 8%), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgb(120 140 120 / 6%), transparent 50%),
+    var(--portal-bg);
+  color: var(--portal-fg);
+  font-family: var(--font-portal-sans), ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+.portal-skin[data-theme="light"] {
+  --portal-bg: #f7f4ee;
+  --portal-fg: #171614;
+  --portal-muted: #6f6a60;
+  --portal-line: rgb(23 22 20 / 12%);
+  --portal-accent: #1c1b19;
+  --portal-surface: rgb(23 22 20 / 3%);
+  background:
+    radial-gradient(1200px 600px at 12% -12%, rgb(40 60 50 / 6%), transparent 55%),
+    radial-gradient(900px 480px at 90% 0%, rgb(180 150 100 / 8%), transparent 50%),
+    var(--portal-bg);
+  color-scheme: light;
+}
+
+.portal-skin .portal-display,
+.app-display {
+  font-family: var(--font-instrument), ui-serif, Georgia, serif;
+}
+
+/* Opacity-only — avoid transform so `position: fixed` drawers aren't trapped. */
+@keyframes portal-fade-up {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.portal-skin .portal-reveal {
+  animation: portal-fade-up 0.55s ease both;
+}
+
+.portal-skin .portal-reveal-2 {
+  animation: portal-fade-up 0.65s 0.08s ease both;
+}
+
+.portal-skin .portal-reveal-3 {
+  animation: portal-fade-up 0.7s 0.16s ease both;
+}
+
+.app-reveal {
+  animation: portal-fade-up 0.45s ease both;
 }
