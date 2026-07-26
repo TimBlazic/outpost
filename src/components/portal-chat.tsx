@@ -92,7 +92,15 @@ function dayKey(iso: string) {
 
 function isImageAttachment(f: Attachment) {
   if (f.mime?.startsWith("image/")) return true;
-  return /\.(png|jpe?g|gif|webp|svg|avif|heic)$/i.test(f.label || "");
+  return /\.(png|jpe?g|gif|webp|svg|avif|heic|heif)$/i.test(f.label || "");
+}
+
+/** Safari/Chrome can't paint HEIC/HEIF in <img> — treat as downloadable file. */
+function canInlinePreview(f: Attachment) {
+  if (!isImageAttachment(f) || !f.url) return false;
+  if (/image\/hei/i.test(f.mime || "")) return false;
+  if (/\.(heic|heif)$/i.test(f.label || "")) return false;
+  return true;
 }
 
 function renderBody(body: string) {
@@ -374,29 +382,29 @@ function AttachmentList({
   portal?: boolean;
 }) {
   if (!files.length) return null;
-  const images = files.filter(isImageAttachment);
-  const others = files.filter((f) => !isImageAttachment(f));
+  const images = files.filter(canInlinePreview);
+  const others = files.filter((f) => !canInlinePreview(f));
 
   return (
     <div className="mt-2 space-y-2">
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {images.map((f) =>
-            f.url ? (
-              <ImageThumb
-                key={f.id}
-                src={f.url}
-                alt={f.label}
-                name={f.label}
-                portal={portal}
-                className={cn(
-                  "ring-1",
-                  portal ? "ring-[var(--portal-line)]" : "ring-border/60"
-                )}
-                imgClassName="max-h-56 max-w-[16rem] object-contain"
-              />
-            ) : null
-          )}
+          {images.map((f) => (
+            <ImageThumb
+              key={f.id}
+              src={f.url!}
+              alt={f.label}
+              name={f.label}
+              portal={portal}
+              className={cn(
+                "ring-1",
+                portal ? "ring-[var(--portal-line)]" : "ring-border/60"
+              )}
+              imgClassName="max-h-56 max-w-[16rem] object-contain"
+              fallbackHref={f.url ?? undefined}
+              fallbackLabel={f.label}
+            />
+          ))}
         </div>
       )}
       {others.length > 0 && (
@@ -414,6 +422,11 @@ function AttachmentList({
               >
                 <Paperclip className="size-3" />
                 {f.label}
+                {/\.(heic|heif)$/i.test(f.label) ? (
+                  <span className="text-muted-foreground no-underline">
+                    · open to view
+                  </span>
+                ) : null}
               </a>
             </li>
           ))}

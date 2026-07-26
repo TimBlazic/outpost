@@ -5,9 +5,9 @@ import { getStudioUnreadSnapshot } from "@/lib/portal/chat-sync";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    await requireStudioSession();
+    await requireStudioSession(request);
 
     const snapshot = await getStudioUnreadSnapshot();
     return NextResponse.json(snapshot, {

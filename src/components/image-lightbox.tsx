@@ -141,6 +141,8 @@ export function ImageThumb({
   className,
   imgClassName,
   portal,
+  fallbackHref,
+  fallbackLabel,
 }: {
   src: string;
   alt?: string;
@@ -148,10 +150,27 @@ export function ImageThumb({
   className?: string;
   imgClassName?: string;
   portal?: boolean;
+  /** If the browser can't paint the image (e.g. HEIC), show a file link instead. */
+  fallbackHref?: string;
+  fallbackLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   if (!src) return null;
+
+  if (failed) {
+    return (
+      <a
+        href={fallbackHref || src}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 text-xs text-primary underline-offset-2 hover:underline"
+      >
+        {fallbackLabel || name || alt || "Attachment"}
+      </a>
+    );
+  }
 
   return (
     <>
@@ -168,6 +187,7 @@ export function ImageThumb({
           src={src}
           alt={alt || name || "Image"}
           className={cn("object-cover", imgClassName)}
+          onError={() => setFailed(true)}
         />
       </button>
       <ImageLightbox

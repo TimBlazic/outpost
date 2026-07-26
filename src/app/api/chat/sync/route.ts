@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    await requireStudioSession();
+    await requireStudioSession(request);
 
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get("projectId")?.trim();

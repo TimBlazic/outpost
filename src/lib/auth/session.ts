@@ -7,7 +7,9 @@ import {
   initialsFromName,
   type Member,
 } from "@/lib/data";
-import { isSupabaseEnabled } from "@/lib/supabase/env";
+import { createClient as createSupabaseJsClient } from "@supabase/supabase-js";
+
+import { getSupabaseEnv, isSupabaseEnabled } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -51,15 +53,54 @@ async function saveFileProfiles(profiles: Member[]) {
   );
 }
 
+async function studioProfileWithAccessToken(accessToken: string): Promise<Member> {
+  const { url, key } = getSupabaseEnv();
+  if (!url || !key) throw new Error("Unauthorized");
+
+  const supabase = createSupabaseJsClient(url, key, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(accessToken);
+  if (error || !user) throw new Error("Unauthorized");
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, name, initials, role, avatar_url")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!data) throw new Error("Unauthorized");
+
+  const profile = mapProfileRow(data as Record<string, unknown>);
+  if (profile.role === "Client") {
+    throw new Error("Forbidden: studio access required");
+  }
+  return profile;
+}
+
 /**
  * Require an authenticated studio user (Admin or Member).
  * Rejects Client-role users to prevent client accounts from accessing
  * studio-only API routes.
+ *
+ * Pass a Request to also accept `Authorization: Bearer <access_token>`
+ * (mobile Expo clients).
  */
-export async function requireStudioSession(): Promise<Member> {
+export async function requireStudioSession(request?: Request): Promise<Member> {
   if (!isSupabaseEnabled()) {
     const profiles = await loadFileProfiles();
     return profiles.find((p) => p.id === "u1") ?? normalizeMember(seedMembers[0]);
+  }
+
+  const bearer = request?.headers.get("authorization");
+  if (bearer?.toLowerCase().startsWith("bearer ")) {
+    const token = bearer.slice(7).trim();
+    if (token) return studioProfileWithAccessToken(token);
   }
 
   const supabase = await createClient();
