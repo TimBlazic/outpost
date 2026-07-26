@@ -56,6 +56,8 @@ export function PortalClientView({
   locale: localeProp,
   clientAuthor,
   unpaidInvoices = [],
+  initialTab,
+  initialTicketId = null,
 }: {
   token?: string;
   project: Project;
@@ -81,10 +83,20 @@ export function PortalClientView({
     Invoice,
     "id" | "invoiceNumber" | "total" | "currency" | "issueDate"
   >[];
+  /** Deep-link: `?tab=messages` */
+  initialTab?: Tab | null;
+  /** Deep-link: `?ticket=` */
+  initialTicketId?: string | null;
 }) {
   const locale = normalizePortalLocale(localeProp ?? project.portalLocale);
   const t = portalT(locale);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(() =>
+    initialTicketId
+      ? "overview"
+      : initialTab === "messages"
+        ? "messages"
+        : "overview"
+  );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [messagesUnread, setMessagesUnread] = useState(() =>
@@ -102,6 +114,22 @@ export function PortalClientView({
 
   // Presence: track client online via Supabase Realtime presence channel.
   const { tracking: presenceTracking } = usePortalPresenceTrack(project.id);
+
+  useEffect(() => {
+    if (initialTicketId) {
+      setTab("overview");
+      return;
+    }
+    if (initialTab === "messages" || initialTab === "overview") {
+      setTab(initialTab);
+    }
+  }, [initialTab, initialTicketId]);
+
+  useEffect(() => {
+    if (!initialTicketId || tab !== "overview") return;
+    const el = document.getElementById("portal-tickets");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [initialTicketId, tab]);
 
   useEffect(() => {
     if (tab === "messages") return;
@@ -339,6 +367,8 @@ export function PortalClientView({
                   members={members}
                   locale={locale}
                   viewer={viewer === "session" ? "session" : "token"}
+                  initialSelectedId={initialTicketId}
+                  clientAuthor={clientAuthor}
                 />
               </section>
             ) : null}

@@ -5,6 +5,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import {
+  getClientById,
   getProjects,
   saveProjects,
   getTasks,
@@ -26,6 +27,8 @@ import type {
 import { isSupabaseEnabled } from "@/lib/supabase/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertClientProjectAccess } from "@/lib/client-accounts/access";
+import { getCurrentProfile } from "@/lib/auth/session";
+import { clientPersonName } from "@/lib/format";
 import { notifyPortalChatChanged } from "@/lib/realtime/notify-chat";
 import { generatePortalToken, hashPin } from "./pin";
 import { assertPortalAccess } from "./session";
@@ -435,14 +438,19 @@ export async function clientCreateTicketComment(
     if (!parent) throw new Error("Invalid reply parent");
   }
 
+  const client = project.clientId
+    ? await getClientById(project.clientId)
+    : null;
   const comment: TicketComment = {
     id: uid("tc"),
     ticketId,
     parentId: input.parentId ?? null,
     body,
     authorKind: "client",
-    authorName: project.client || "Client",
-    authorId: null,
+    authorName: client
+      ? clientPersonName(client)
+      : project.client || "Client",
+    authorId: client?.authUserId ?? null,
     createdAt: nowIso(),
     editedAt: null,
   };
@@ -713,14 +721,24 @@ export async function sessionClientCreateTicketComment(
     if (!parent) throw new Error("Invalid reply parent");
   }
 
+  let authorName = clientPersonName(client);
+  let authorId = client.authUserId ?? null;
+  try {
+    const profile = await getCurrentProfile();
+    if (profile.name?.trim()) authorName = profile.name.trim();
+    if (profile.id) authorId = profile.id;
+  } catch {
+    /* keep client fields */
+  }
+
   const comment: TicketComment = {
     id: uid("tc"),
     ticketId,
     parentId: input.parentId ?? null,
     body,
     authorKind: "client",
-    authorName: client.name || "Client",
-    authorId: null,
+    authorName,
+    authorId,
     createdAt: nowIso(),
     editedAt: null,
   };

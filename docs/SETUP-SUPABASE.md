@@ -53,8 +53,18 @@ In Supabase SQL Editor, run in order:
 20. `supabase/migrations/20260725300000_portal_realtime_rls.sql` (Realtime RLS for `portal_messages` + reactions)
 21. `supabase/migrations/20260725310000_ticket_comments_realtime_rls.sql` (Realtime RLS for ticket comments/reactions)
 22. `supabase/migrations/20260725320000_client_portal_locale.sql` (portal language on client account)
-23. `supabase/seed.sql` (optional)
-24. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
+23. `supabase/migrations/20260726200000_portal_notification_events.sql` (client email notification queue)
+24. `supabase/seed.sql` (optional)
+25. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
+
+For portal notification emails (Resend + cron flush), also set:
+
+```env
+RESEND_API_KEY=re_...
+CRON_SECRET=long-random-string
+```
+
+Vercel Cron hits `/api/cron/portal-notifications` every minute with `Authorization: Bearer $CRON_SECRET`.
 
 Or with CLI:
 

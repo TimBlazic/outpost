@@ -54,10 +54,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isLogin) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/";
-    redirectUrl.search = "";
-    return NextResponse.redirect(redirectUrl);
+    const next = request.nextUrl.searchParams.get("next");
+    const safe =
+      next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+    return NextResponse.redirect(new URL(safe, request.url));
   }
 
   return supabaseResponse;

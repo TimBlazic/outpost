@@ -47,19 +47,24 @@ export const dynamic = "force-dynamic";
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; ticket?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const initialTab = sp.tab === "messages" ? ("messages" as const) : null;
+  const initialTicketId = (sp.ticket ?? "").trim() || null;
   const reqHeaders = await headers();
   const role = getHostRole(getRequestHostname(reqHeaders.get("host")));
 
   if (role === "client") {
-    return renderClientPortal(id);
+    return renderClientPortal(id, { initialTab, initialTicketId });
   }
 
   if (role === "unified" && (await tryClientPortalSession())) {
-    return renderClientPortal(id);
+    return renderClientPortal(id, { initialTab, initialTicketId });
   }
 
   const project = await getProjectById(id);
@@ -185,7 +190,13 @@ export default async function ProjectDetailPage({
 }
 
 /** Renders the portal client view for an authenticated client account. */
-async function renderClientPortal(id: string) {
+async function renderClientPortal(
+  id: string,
+  deepLink: {
+    initialTab: "messages" | null;
+    initialTicketId: string | null;
+  }
+) {
   const { client } = await requireClientSession();
   if (!client.onboardingCompletedAt) redirect("/onboarding");
   const project = await getProjectById(id);
@@ -258,6 +269,8 @@ async function renderClientPortal(id: string) {
         viewer="session"
         locale={client.portalLocale}
         unpaidInvoices={unpaidInvoices}
+        initialTab={deepLink.initialTab}
+        initialTicketId={deepLink.initialTicketId}
         clientAuthor={{
           id: me.id,
           name:

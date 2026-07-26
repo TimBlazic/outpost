@@ -78,6 +78,7 @@ function PortalTicketDrawer({
   commentFiles = [],
   members = [],
   viewer = "token",
+  clientAuthor = null,
 }: {
   ticket: Ticket | null;
   locale: PortalLocale;
@@ -90,6 +91,11 @@ function PortalTicketDrawer({
   commentFiles?: Attachment[];
   members?: Member[];
   viewer?: "token" | "session";
+  clientAuthor?: {
+    name: string;
+    avatarUrl?: string | null;
+    id?: string | null;
+  } | null;
 }) {
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -165,13 +171,19 @@ function PortalTicketDrawer({
           members={members}
           mentionExtras={[
             {
-              label: project.client || "Client",
-              insert: mentionHandle(project.client || "Client"),
+              label: clientAuthor?.name || project.client || "Client",
+              insert: mentionHandle(
+                clientAuthor?.name || project.client || "Client"
+              ),
             },
           ]}
           canComment={project.clientCanComment}
           currentAuthorKind="client"
-          currentAuthorName={project.client || "Client"}
+          currentAuthorName={
+            clientAuthor?.name || project.client || "Client"
+          }
+          currentAuthorId={clientAuthor?.id ?? null}
+          currentAuthorAvatarUrl={clientAuthor?.avatarUrl ?? null}
           variant="portal"
           portalToken={token}
           sessionProjectId={viewer === "session" ? project.id : undefined}
@@ -243,6 +255,7 @@ export function PortalTickets({
   locale,
   initialSelectedId = null,
   viewer = "token",
+  clientAuthor = null,
 }: {
   token: string;
   project: Project;
@@ -255,6 +268,11 @@ export function PortalTickets({
   locale: PortalLocale;
   initialSelectedId?: string | null;
   viewer?: "token" | "session";
+  clientAuthor?: {
+    name: string;
+    avatarUrl?: string | null;
+    id?: string | null;
+  } | null;
 }) {
   const t = portalT(locale);
   const [view, setView] = useState<ViewMode>("board");
@@ -498,6 +516,7 @@ export function PortalTickets({
         commentFiles={selected ? ticketCommentFiles[selected.id] ?? [] : []}
         members={members}
         viewer={viewer}
+        clientAuthor={clientAuthor}
       />
     </div>
   );

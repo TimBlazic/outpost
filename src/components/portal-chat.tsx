@@ -626,10 +626,14 @@ export function PortalChat({
   const [emojiFor, setEmojiFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const replyFileRef = useRef<HTMLInputElement>(null);
+  /** Only auto-scroll when the user is already near the bottom (or just sent). */
+  const stickToBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(initialMessages.length);
   const revisionRef = useRef(
     chatRevision(initialMessages, initialReactions, initialFiles)
   );
@@ -698,15 +702,30 @@ export function PortalChat({
   const rows = useMemo(() => buildDayRows(topLevel), [topLevel]);
 
   useEffect(() => {
-    setMessages(initialMessages);
-    setReactions(initialReactions);
-    setFiles(initialFiles);
-    revisionRef.current = chatRevision(
+    const next = chatRevision(
       initialMessages,
       initialReactions,
       initialFiles
     );
+    if (next === revisionRef.current) return;
+    revisionRef.current = next;
+    setMessages(initialMessages);
+    setReactions(initialReactions);
+    setFiles(initialFiles);
   }, [initialMessages, initialReactions, initialFiles]);
+
+  function scrollListToBottom() {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function onListScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distance < 96;
+  }
 
   const syncChat = async () => {
     if (portal && !session && !portalToken) return;
@@ -772,9 +791,14 @@ export function PortalChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync on mount/viewer
   }, [projectId, portal, session, portalToken]);
 
+  // Scroll only the chat pane (never the page). Skip reaction-only updates
+  // and don't yank the user if they scrolled up to read history.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, reactions.length]);
+    const grew = messages.length > prevMessageCountRef.current;
+    prevMessageCountRef.current = messages.length;
+    if (!grew || !stickToBottomRef.current) return;
+    requestAnimationFrame(() => scrollListToBottom());
+  }, [messages.length]);
 
   async function uploadFiles(messageId: string, list: File[]) {
     for (const file of list) {
@@ -832,7 +856,9 @@ export function PortalChat({
           setPendingFiles([]);
           inputRef.current?.focus();
         }
+        stickToBottomRef.current = true;
         await syncChat();
+        requestAnimationFrame(() => scrollListToBottom());
       } catch (e) {
         setError(e instanceof Error ? e.message : t.failed);
       }
@@ -1225,8 +1251,10 @@ export function PortalChat({
       )}
 
       <div
+        ref={listRef}
+        onScroll={onListScroll}
         className={cn(
-          "min-h-0 flex-1 overflow-y-auto",
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
           compact && !hideChannelHeader ? "max-h-[32rem]" : ""
         )}
       >

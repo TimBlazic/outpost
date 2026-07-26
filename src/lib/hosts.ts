@@ -88,8 +88,17 @@ export function getClientPortalOrigin(requestOrigin?: string) {
  * - client host → that origin
  * - otherwise → NEXT_PUBLIC_PORTAL_URL (production client portal)
  */
-export function getClientAuthCallbackUrl(requestOrigin?: string) {
-  return `${getClientPortalOrigin(requestOrigin)}/auth/callback?next=/`;
+export function getClientAuthCallbackUrl(
+  requestOrigin?: string,
+  nextPath: string = "/"
+) {
+  const next =
+    nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/";
+  const url = new URL(
+    `${getClientPortalOrigin(requestOrigin)}/auth/callback`
+  );
+  url.searchParams.set("next", next);
+  return url.toString();
 }
 
 /** Stable URL to share with clients (does not expire). */

@@ -116,6 +116,23 @@ export async function postStudioPortalMessage(
 
   const all = await getPortalMessages();
   await savePortalMessages([...all, message]);
+
+  if (project.clientId) {
+    const { enqueueStudioMessage } = await import(
+      "@/lib/portal/notifications/enqueue"
+    );
+    const { schedulePortalNotificationFlush } = await import(
+      "@/lib/portal/notifications/schedule"
+    );
+    await enqueueStudioMessage({
+      projectId,
+      clientId: project.clientId,
+      messageId: message.id,
+      excerpt: text,
+    });
+    schedulePortalNotificationFlush();
+  }
+
   revalidateChat(projectId, project.clientId);
   return message.id;
 }

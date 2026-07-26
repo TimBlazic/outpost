@@ -45,7 +45,10 @@ export async function login(formData: FormData) {
   redirect(next);
 }
 
-export async function requestClientMagicLink(email: string) {
+export async function requestClientMagicLink(
+  email: string,
+  nextPath: string = "/"
+) {
   if (!isSupabaseEnabled()) return;
 
   const normalizedEmail = normalizeEmail(email);
@@ -61,7 +64,10 @@ export async function requestClientMagicLink(email: string) {
     (host.includes("localhost") || host.startsWith("127.0.0.1")
       ? "http"
       : "https");
-  const emailRedirectTo = getClientAuthCallbackUrl(`${proto}://${host}`);
+  const emailRedirectTo = getClientAuthCallbackUrl(
+    `${proto}://${host}`,
+    nextPath
+  );
   const { error } = await supabase.auth.signInWithOtp({
     email: normalizedEmail,
     options: {

@@ -14,6 +14,8 @@ import {
   getTickets,
   saveTickets,
 } from "@/lib/store";
+import { enqueueTicketsBulk } from "@/lib/portal/notifications/enqueue";
+import { schedulePortalNotificationFlush } from "@/lib/portal/notifications/schedule";
 import { generateTicketDrafts, type TicketAiDraft } from "@/lib/tickets/ai";
 import { checklistTitlesFromPhases } from "@/lib/tickets/draft-merge";
 
@@ -111,6 +113,18 @@ export async function createTicketsBulkAction(
   }));
 
   await saveTickets([...created, ...existing]);
+
+  if (project.clientId) {
+    await enqueueTicketsBulk({
+      projectId,
+      clientId: project.clientId,
+      count: created.length,
+      titles: created.map((t) => t.title).slice(0, 5),
+      ticketIds: created.map((t) => t.id),
+    });
+    schedulePortalNotificationFlush();
+  }
+
   revalidatePath(`/projects/${projectId}`);
   return created.map((t) => t.id);
 }

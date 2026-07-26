@@ -51,16 +51,7 @@ export default async function ClientLoginPage({
     );
 
     try {
-      await requestClientMagicLink(submittedEmail);
-      const params = new URLSearchParams({
-        sent: "1",
-        next: requestedNext,
-        lang: requestedLang,
-      });
-      if (submittedEmail.trim()) {
-        params.set("email", submittedEmail.trim().toLowerCase());
-      }
-      redirect(`/client-login?${params.toString()}`);
+      await requestClientMagicLink(submittedEmail, requestedNext);
     } catch (err) {
       const message =
         err instanceof Error && err.message ? err.message : "Failed to send link";
@@ -74,6 +65,17 @@ export default async function ClientLoginPage({
       }
       redirect(`/client-login?${params.toString()}`);
     }
+
+    // redirect() throws — must stay outside try/catch or it shows as "NEXT_REDIRECT"
+    const params = new URLSearchParams({
+      sent: "1",
+      next: requestedNext,
+      lang: requestedLang,
+    });
+    if (submittedEmail.trim()) {
+      params.set("email", submittedEmail.trim().toLowerCase());
+    }
+    redirect(`/client-login?${params.toString()}`);
   }
 
   return (

@@ -81,6 +81,7 @@ function CommentAvatar({
   name,
   kind,
   authorId,
+  avatarUrl,
   members,
   size = "md",
   portal,
@@ -88,36 +89,37 @@ function CommentAvatar({
   name: string;
   kind: TicketParty;
   authorId?: string | null;
+  /** Explicit URL when members list has no match (e.g. session client). */
+  avatarUrl?: string | null;
   members: Member[];
   size?: "sm" | "md";
   portal?: boolean;
 }) {
-  if (kind === "studio") {
-    const member = authorId
-      ? memberById(authorId, members)
-      : members.find((m) => m.name === name);
-    if (member && member.name !== "Unknown") {
-      return (
-        <UserAvatar
-          member={member}
-          size={size}
-          fallbackClassName={
-            portal
-              ? "bg-[var(--portal-fg)] text-[var(--portal-bg)]"
-              : undefined
-          }
-        />
+  const member = authorId
+    ? memberById(authorId, members)
+    : members.find(
+        (m) => m.name === name || m.name.toLowerCase() === name.toLowerCase()
       );
-    }
+  const resolved =
+    member && member.name !== "Unknown"
+      ? member
+      : null;
+  const url = resolved?.avatarUrl || avatarUrl || null;
+  const fallback =
+    kind === "studio"
+      ? portal
+        ? "bg-[var(--portal-fg)] text-[var(--portal-bg)]"
+        : undefined
+      : portal
+        ? "bg-[var(--portal-surface)] text-[var(--portal-fg)] ring-1 ring-[var(--portal-line)]"
+        : "bg-muted text-foreground ring-1 ring-border";
+
+  if (resolved) {
     return (
       <UserAvatar
-        name={name}
+        member={{ ...resolved, avatarUrl: url }}
         size={size}
-        fallbackClassName={
-          portal
-            ? "bg-[var(--portal-fg)] text-[var(--portal-bg)]"
-            : "bg-foreground text-background"
-        }
+        fallbackClassName={fallback}
       />
     );
   }
@@ -125,11 +127,13 @@ function CommentAvatar({
   return (
     <UserAvatar
       name={name}
+      avatarUrl={url}
       size={size}
       fallbackClassName={
-        portal
-          ? "bg-[var(--portal-surface)] text-[var(--portal-fg)] ring-1 ring-[var(--portal-line)]"
-          : "bg-muted text-foreground ring-1 ring-border"
+        fallback ??
+        (portal
+          ? "bg-[var(--portal-fg)] text-[var(--portal-bg)]"
+          : "bg-foreground text-background")
       }
     />
   );
@@ -295,6 +299,8 @@ export function TicketComments({
   canDelete = false,
   currentAuthorKind,
   currentAuthorName,
+  currentAuthorId = null,
+  currentAuthorAvatarUrl = null,
   variant = "studio",
   portalToken,
   sessionProjectId,
@@ -312,6 +318,8 @@ export function TicketComments({
   canDelete?: boolean;
   currentAuthorKind: TicketParty;
   currentAuthorName: string;
+  currentAuthorId?: string | null;
+  currentAuthorAvatarUrl?: string | null;
   variant?: "studio" | "portal";
   portalToken?: string;
   sessionProjectId?: string;
@@ -482,23 +490,36 @@ export function TicketComments({
     /** Top-level comment id — replies stay flat under this thread. */
     threadId: string;
   }) {
-    const resolvedMember =
-      comment.authorKind === "studio"
-        ? comment.authorId
-          ? memberById(comment.authorId, members)
-          : members.find((m) => m.name === comment.authorName)
-        : null;
+    const resolvedMember = comment.authorId
+      ? memberById(comment.authorId, members)
+      : members.find(
+          (m) =>
+            m.name === comment.authorName ||
+            m.name.toLowerCase() === comment.authorName.toLowerCase()
+        );
     const displayName =
       resolvedMember && resolvedMember.name !== "Unknown"
         ? resolvedMember.name
         : comment.authorName;
     const mine =
       comment.authorKind === currentAuthorKind &&
-      (comment.authorId
-        ? members.some(
-            (m) => m.id === comment.authorId && m.name === currentAuthorName
-          ) || comment.authorName === currentAuthorName
-        : comment.authorName === currentAuthorName);
+      ((currentAuthorId && comment.authorId === currentAuthorId) ||
+        comment.authorName === currentAuthorName ||
+        (comment.authorId
+          ? members.some(
+              (m) => m.id === comment.authorId && m.name === currentAuthorName
+            )
+          : false));
+    const commentAvatarUrl =
+      (resolvedMember && resolvedMember.name !== "Unknown"
+        ? resolvedMember.avatarUrl
+        : null) ||
+      (comment.authorKind === "client" &&
+      ((currentAuthorId && comment.authorId === currentAuthorId) ||
+        comment.authorName === currentAuthorName ||
+        !comment.authorId)
+        ? currentAuthorAvatarUrl
+        : null);
     const commentReactions = reactionsByComment[comment.id] ?? [];
     const commentFiles = filesByComment[comment.id] ?? [];
     const grouped = groupReactions(commentReactions);
@@ -509,6 +530,7 @@ export function TicketComments({
           name={displayName}
           kind={comment.authorKind}
           authorId={comment.authorId}
+          avatarUrl={commentAvatarUrl}
           members={members}
           size={nested ? "sm" : "md"}
           portal={portal}
@@ -672,10 +694,11 @@ export function TicketComments({
         name={currentAuthorName}
         kind={currentAuthorKind}
         authorId={
-          currentAuthorKind === "studio"
-            ? members.find((m) => m.name === currentAuthorName)?.id
-            : null
+          currentAuthorId ||
+          members.find((m) => m.name === currentAuthorName)?.id ||
+          null
         }
+        avatarUrl={currentAuthorAvatarUrl}
         members={members}
         portal={portal}
       />
@@ -810,10 +833,11 @@ export function TicketComments({
                   name={currentAuthorName}
                   kind={currentAuthorKind}
                   authorId={
-                    currentAuthorKind === "studio"
-                      ? members.find((m) => m.name === currentAuthorName)?.id
-                      : null
+                    currentAuthorId ||
+                    members.find((m) => m.name === currentAuthorName)?.id ||
+                    null
                   }
+                  avatarUrl={currentAuthorAvatarUrl}
                   members={members}
                   size="sm"
                   portal={portal}

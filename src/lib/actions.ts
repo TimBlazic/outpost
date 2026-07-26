@@ -38,6 +38,7 @@ import {
   getQuotesForLead,
   getInvoices,
   saveInvoices,
+  getProjectById,
 } from "./store";
 import type {
   Lead,
@@ -93,6 +94,28 @@ function revalidateLead(id: string) {
   revalidatePath("/leads");
   revalidatePath(`/leads/${id}`);
   revalidatePath("/");
+}
+
+async function notifyTicketWaiting(input: {
+  projectId: string;
+  ticketId: string;
+  ticketTitle: string;
+}) {
+  const project = await getProjectById(input.projectId);
+  if (!project?.clientId) return;
+  const { enqueueTicketWaiting } = await import(
+    "@/lib/portal/notifications/enqueue"
+  );
+  const { schedulePortalNotificationFlush } = await import(
+    "@/lib/portal/notifications/schedule"
+  );
+  await enqueueTicketWaiting({
+    projectId: project.id,
+    clientId: project.clientId,
+    ticketId: input.ticketId,
+    ticketTitle: input.ticketTitle,
+  });
+  schedulePortalNotificationFlush();
 }
 
 /** Bundle for the lead side drawer (list/kanban → peek). */
@@ -1478,12 +1501,16 @@ export async function updateTicket(id: string, input: TicketInput) {
   const tickets = await getTickets();
   const current = tickets.find((t) => t.id === id);
   if (!current) throw new Error("Ticket not found");
+  const nextTitle = input.title.trim();
+  const becameWaiting =
+    current.status !== "Waiting on client" &&
+    input.status === "Waiting on client";
   await saveTickets(
     tickets.map((t) =>
       t.id === id
         ? {
             ...t,
-            title: input.title.trim(),
+            title: nextTitle,
             description: input.description,
             status: input.status,
             priority: input.priority ?? t.priority,
@@ -1495,6 +1522,13 @@ export async function updateTicket(id: string, input: TicketInput) {
         : t
     )
   );
+  if (becameWaiting) {
+    await notifyTicketWaiting({
+      projectId: current.projectId,
+      ticketId: id,
+      ticketTitle: nextTitle || current.title,
+    });
+  }
   revalidatePath(`/projects/${current.projectId}`);
   revalidatePath(`/projects/${current.projectId}/tickets/${id}`);
 }
@@ -1506,6 +1540,16 @@ export async function setTicketStatus(id: string, status: TicketStatus) {
   await saveTickets(
     tickets.map((t) => (t.id === id ? { ...t, status } : t))
   );
+  if (
+    current.status !== "Waiting on client" &&
+    status === "Waiting on client"
+  ) {
+    await notifyTicketWaiting({
+      projectId: current.projectId,
+      ticketId: id,
+      ticketTitle: current.title,
+    });
+  }
   revalidatePath(`/projects/${current.projectId}`);
   revalidatePath(`/projects/${current.projectId}/tickets/${id}`);
 }
@@ -1578,6 +1622,26 @@ export async function createTicketComment(
     editedAt: null,
   };
   await saveTicketComments([...comments, comment]);
+
+  const project = await getProjectById(ticket.projectId);
+  if (project?.clientId) {
+    const { enqueueTicketComment } = await import(
+      "@/lib/portal/notifications/enqueue"
+    );
+    const { schedulePortalNotificationFlush } = await import(
+      "@/lib/portal/notifications/schedule"
+    );
+    await enqueueTicketComment({
+      projectId: project.id,
+      clientId: project.clientId,
+      ticketId,
+      ticketTitle: ticket.title,
+      commentId: comment.id,
+      excerpt: body,
+    });
+    schedulePortalNotificationFlush();
+  }
+
   revalidatePath(`/projects/${ticket.projectId}`);
   revalidatePath(`/projects/${ticket.projectId}/tickets/${ticketId}`);
   return comment.id;
