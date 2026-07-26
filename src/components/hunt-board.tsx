@@ -39,7 +39,9 @@ export function HuntBoard({
   const [lastLeadId, setLastLeadId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const qualifyDepth =
-    (qualifyQueue.activeId ? 1 : 0) + qualifyQueue.pendingIds.length;
+    (qualifyQueue.depth ?? 0) > 0
+      ? qualifyQueue.depth
+      : (qualifyQueue.activeId ? 1 : 0) + qualifyQueue.pendingIds.length;
 
   useEffect(() => {
     try {

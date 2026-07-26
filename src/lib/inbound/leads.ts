@@ -14,6 +14,8 @@ import {
 export type InboundLeadPayload = {
   name: string;
   email: string;
+  /** Optional company site — enables auto qualify when present */
+  website?: string;
   /** Stable key from the site form, e.g. website | webapp | mobile | ecommerce | other */
   projectType?: string;
   /** Human label (optional, for the note body) */
@@ -161,10 +163,12 @@ export async function createInboundLead(payload: InboundLeadPayload) {
     .filter((line) => line !== null)
     .join("\n");
 
+  const website = (payload.website ?? "").trim();
+
   const lead: Lead = {
     id: leadId,
     company: name,
-    website: "",
+    website,
     contact: name,
     email,
     phone: "",
@@ -272,6 +276,17 @@ export async function createInboundLead(payload: InboundLeadPayload) {
     await syncLeadNoteCount(leadId);
     const activities = await getActivities();
     await saveActivities([activity, ...activities]);
+  }
+
+  try {
+    const { isLeadQualifyEligible, enqueueLeadQualify } = await import(
+      "@/lib/qualify/jobs"
+    );
+    if (isLeadQualifyEligible(lead)) {
+      await enqueueLeadQualify(leadId);
+    }
+  } catch (err) {
+    console.error("[lead-qualify] inbound enqueue failed", err);
   }
 
   return {

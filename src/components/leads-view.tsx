@@ -65,6 +65,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { LeadsBulkQualifyBar } from "@/components/leads-bulk-qualify";
 
 export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
   const router = useRouter();
@@ -76,6 +77,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
     [searchParams]
   );
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [queryDraft, setQueryDraft] = useState(listQuery.q);
   useEffect(() => {
     setQueryDraft(listQuery.q);
@@ -238,6 +240,10 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <LeadsBulkQualifyBar
+              selectedIds={selectedIds}
+              onClearSelection={() => setSelectedIds([])}
+            />
             <Button
               type="button"
               size="sm"
@@ -362,6 +368,30 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
               <Table>
                 <TableHeader className={stickyTableHeaderClass}>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={
+                          pageRows.length > 0 &&
+                          pageRows.every((l) => selectedIds.includes(l.id))
+                        }
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedIds((prev) => [
+                              ...new Set([
+                                ...prev,
+                                ...pageRows.map((l) => l.id),
+                              ]),
+                            ]);
+                          } else {
+                            const pageSet = new Set(pageRows.map((l) => l.id));
+                            setSelectedIds((prev) =>
+                              prev.filter((id) => !pageSet.has(id))
+                            );
+                          }
+                        }}
+                        aria-label="Select page"
+                      />
+                    </TableHead>
                     <SortableHead
                       label="Company"
                       sortKey="company"
@@ -413,6 +443,22 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
                 <TableBody>
                   {pageRows.map((l) => (
                     <ClickableRow key={l.id} onSelect={() => openLead(l.id)}>
+                      <TableCell
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={selectedIds.includes(l.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedIds((prev) =>
+                              checked
+                                ? [...prev, l.id]
+                                : prev.filter((id) => id !== l.id)
+                            );
+                          }}
+                          aria-label={`Select ${l.company}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <span className="font-medium">{l.company}</span>
                         <span className="block text-xs text-muted-foreground">

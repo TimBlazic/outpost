@@ -1,7 +1,7 @@
 # Background Qualify (auto-apply) — Design
 
 **Date:** 2026-07-26  
-**Status:** Approved for implementation  
+**Status:** Implemented (apply rules) — **queue superseded** by `2026-07-26-bulk-auto-qualify-design.md` (server `lead_qualify_jobs`)  
 
 ## Goal
 
@@ -12,7 +12,7 @@ After Hunt **Keep** (and from lead detail), run the existing Qualify research pi
 | Topic | Choice |
 |--------|--------|
 | Apply mode | Auto-apply (no review gate) |
-| Queue | Client-side sequential queue |
+| Queue | **Server** `lead_qualify_jobs` + cron (was client-side; see bulk-auto-qualify spec) |
 | No website | Skip qualify; Keep still works |
 | Verdict → status | go → Ready to contact; maybe → Researching; no-go → leave status, add tag `no-go` |
 | Draft | Save as pinned note |
@@ -29,6 +29,5 @@ After Hunt **Keep** (and from lead detail), run the existing Qualify research pi
 
 ## Out of scope
 
-- Server job table / cron  
-- Progress UI beyond queue count on Hunt  
+- Parallel qualify jobs  
 - Changing the interactive Qualify URL wizard review gate  

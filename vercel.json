@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/portal-notifications",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/lead-qualify",
+      "schedule": "* * * * *"
     }
   ]
 }

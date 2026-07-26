@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { isLeadQualifyQueuedAction } from "@/lib/qualify/actions";
 import { enqueueQualify } from "@/lib/qualify/queue";
 import { useQualifyQueue } from "@/lib/qualify/use-qualify-queue";
 
@@ -21,18 +22,44 @@ export function QualifyLeadButton({
   const queue = useQualifyQueue();
   const handledSeq = useRef(0);
   const hasSite = Boolean(website?.trim());
+  const [serverQueued, setServerQueued] = useState(false);
   const inQueue =
-    queue.activeId === leadId || queue.pendingIds.includes(leadId);
+    serverQueued ||
+    queue.pendingIds.includes(leadId);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const queued = await isLeadQualifyQueuedAction(leadId);
+        if (alive) setServerQueued(queued);
+      } catch {
+        /* ignore */
+      }
+    };
+    void tick();
+    if (!inQueue && !hasSite) return;
+    const id = window.setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [leadId, inQueue, hasSite]);
 
   useEffect(() => {
     const done = queue.lastCompleted;
     if (!done || done.id !== leadId) return;
     if (done.seq <= handledSeq.current) return;
     handledSeq.current = done.seq;
-    // Prefer parent callback (drawer reload); otherwise soft refresh.
-    if (onDone) onDone();
-    else router.refresh();
-  }, [queue.lastCompleted, leadId, onDone, router]);
+    // Enqueue ack — wait for server job to finish via serverQueued poll.
+  }, [queue.lastCompleted, leadId]);
+
+  useEffect(() => {
+    if (!serverQueued && handledSeq.current > 0) {
+      if (onDone) onDone();
+      else router.refresh();
+    }
+  }, [serverQueued, onDone, router]);
 
   const label = !hasSite
     ? "No website"
@@ -52,7 +79,7 @@ export function QualifyLeadButton({
             ? "Qualify running…"
             : "Research site + Companywall and update this lead"
       }
-      onClick={() => enqueueQualify(leadId)}
+      onClick={() => enqueueQualify(leadId, true)}
     >
       <Sparkles className="size-4" />
       {label}

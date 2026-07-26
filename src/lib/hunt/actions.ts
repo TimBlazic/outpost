@@ -153,6 +153,12 @@ export async function keepProspect(id: string) {
       const existing = findLeadIdByWebsiteHost(await getLeads(), host);
       if (existing) {
         await repo.markKept(id, existing);
+        try {
+          const { enqueueLeadQualify } = await import("@/lib/qualify/jobs");
+          await enqueueLeadQualify(existing);
+        } catch {
+          /* ignore */
+        }
         revalidatePath("/hunt");
         revalidatePath("/leads");
         return { leadId: existing, alreadyExisted: true as const };

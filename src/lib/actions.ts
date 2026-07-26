@@ -168,6 +168,18 @@ export async function createLead(input: LeadInput) {
   };
   await saveLeads([lead, ...leads]);
   revalidateLead(lead.id);
+
+  try {
+    const { isLeadQualifyEligible, enqueueLeadQualify } = await import(
+      "@/lib/qualify/jobs"
+    );
+    if (isLeadQualifyEligible(lead)) {
+      await enqueueLeadQualify(lead.id);
+    }
+  } catch (err) {
+    console.error("[lead-qualify] auto enqueue failed", err);
+  }
+
   return lead.id;
 }
 
