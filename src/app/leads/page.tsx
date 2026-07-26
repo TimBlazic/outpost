@@ -41,7 +41,9 @@ export default async function LeadsPage() {
         <LeadQualifyDialogFromSearch />
       </Suspense>
       <div className="flex min-h-0 flex-1 flex-col">
-        <LeadsView leads={leads} />
+        <Suspense fallback={null}>
+          <LeadsView leads={leads} />
+        </Suspense>
       </div>
     </div>
   );
