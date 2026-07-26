@@ -65,11 +65,13 @@ RESEND_API_KEY=re_...
 CRON_SECRET=long-random-string
 ```
 
-Vercel Cron hits every minute:
+Vercel Cron (`vercel.json`) hits every minute:
 - `/api/cron/portal-notifications`
 - `/api/cron/lead-qualify`
 
 Both expect `Authorization: Bearer $CRON_SECRET`.
+
+Minute-level schedules require **Vercel Pro** (Hobby only allows once-per-day crons and rejects the deploy otherwise).
 
 Or with CLI:
 
