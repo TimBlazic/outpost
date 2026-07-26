@@ -5,6 +5,7 @@ import { ExternalLink, Upload } from "lucide-react";
 
 import type {
   Attachment,
+  Invoice,
   Member,
   PortalMessage,
   PortalMessageReaction,
@@ -31,6 +32,7 @@ import { usePortalPresenceTrack } from "@/lib/realtime/portal-presence";
 import { PortalChat } from "@/components/portal-chat";
 import { PortalThemeToggle } from "@/components/portal-theme-toggle";
 import { PortalTickets } from "@/components/portal-tickets";
+import { PortalUnpaidInvoices } from "@/components/portal-unpaid-invoices";
 import { PortalWelcome } from "@/components/portal-welcome";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -53,6 +55,7 @@ export function PortalClientView({
   viewer = "token",
   locale: localeProp,
   clientAuthor,
+  unpaidInvoices = [],
 }: {
   token?: string;
   project: Project;
@@ -74,6 +77,10 @@ export function PortalClientView({
     avatarUrl?: string | null;
     id?: string | null;
   } | null;
+  unpaidInvoices?: Pick<
+    Invoice,
+    "id" | "invoiceNumber" | "total" | "currency" | "issueDate"
+  >[];
 }) {
   const locale = normalizePortalLocale(localeProp ?? project.portalLocale);
   const t = portalT(locale);
@@ -253,6 +260,10 @@ export function PortalClientView({
 
         {tab === "overview" && (
           <div className="space-y-10 pb-8">
+            <PortalUnpaidInvoices
+              invoices={unpaidInvoices}
+              locale={locale}
+            />
             <PortalWelcome
               token={token || project.id}
               intro={project.portalIntro}
@@ -336,7 +347,7 @@ export function PortalClientView({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="portal-display text-2xl italic">{t.files}</h2>
                 {project.clientCanUploadFiles && (
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-[var(--portal-accent)] px-3 py-2 text-sm text-[var(--portal-bg)] hover:bg-white">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-[var(--portal-accent)] px-3 py-2 text-sm text-[var(--portal-bg)] transition-opacity hover:opacity-90">
                     <Upload className="size-3.5" />
                     {t.upload}
                     <input

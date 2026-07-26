@@ -313,7 +313,7 @@ export function ClientOnboardingForm({
                   setStep(2);
                 }}
                 disabled={!canContinue || pending}
-                className="h-11 min-w-[8.5rem]"
+                className="h-11 min-w-[8.5rem] bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
               >
                 {t.onboardingContinue}
               </Button>
@@ -458,11 +458,15 @@ export function ClientOnboardingForm({
                   setStep(1);
                 }}
                 disabled={pending}
-                className="text-[var(--portal-muted)]"
+                className="text-[var(--portal-muted)] hover:bg-[var(--portal-surface)] hover:text-[var(--portal-fg)]"
               >
                 {t.onboardingBack}
               </Button>
-              <Button type="submit" disabled={pending} className="h-11 min-w-[8.5rem]">
+              <Button
+                type="submit"
+                disabled={pending}
+                className="h-11 min-w-[8.5rem] bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
+              >
                 {pending ? t.onboardingSaving : t.onboardingFinish}
               </Button>
             </div>

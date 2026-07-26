@@ -35,6 +35,9 @@ import {
   getNotesForLead,
   getActivitiesForLead,
   getAttachmentsFor,
+  getQuotesForLead,
+  getInvoices,
+  saveInvoices,
 } from "./store";
 import type {
   Lead,
@@ -59,11 +62,19 @@ import type {
   Client,
   Ticket,
   TicketStatus,
+  TicketPriority,
   TicketParty,
   TicketComment,
   TicketCommentReaction,
 } from "./data";
-import { isArchived, memberById, members as seedMembers, normalizeClient } from "./data";
+import {
+  defaultPaymentSchedule,
+  isArchived,
+  memberById,
+  members as seedMembers,
+  normalizeClient,
+  normalizeInvoice,
+} from "./data";
 import { getCurrentProfile, getCurrentUserId } from "./auth/session";
 import { generatePortalToken } from "./portal/pin";
 import { isSupabaseEnabled } from "./supabase/env";
@@ -88,12 +99,13 @@ function revalidateLead(id: string) {
 export async function getLeadDetailAction(id: string) {
   const lead = await getLeadById(id);
   if (!lead) return null;
-  const [activities, notes, files] = await Promise.all([
+  const [activities, notes, files, quotes] = await Promise.all([
     getActivitiesForLead(id),
     getNotesForLead(id),
     getAttachmentsFor("lead", id),
+    getQuotesForLead(id),
   ]);
-  return { lead, activities, notes, files };
+  return { lead, activities, notes, files, quotes };
 }
 
 // ---- Leads ----------------------------------------------------------------
@@ -852,7 +864,10 @@ export async function createProject(input: ProjectInput) {
     cost: input.cost,
     source: input.source,
     leadId: input.leadId,
-    payments: [],
+    payments: defaultPaymentSchedule(input.value).map((p) => ({
+      ...p,
+      id: uid("pay"),
+    })),
     portalEnabled: true,
     portalToken: generatePortalToken(),
     portalPinHash: null,
@@ -1013,6 +1028,11 @@ export async function deleteProject(id: string) {
 
 export async function togglePaymentPaid(projectId: string, paymentId: string) {
   const projects = await getProjects();
+  const project = projects.find((p) => p.id === projectId);
+  const payment = project?.payments.find((p) => p.id === paymentId);
+  if (!project || !payment) throw new Error("Payment not found");
+
+  const markingPaid = !payment.paid;
   const now = today();
   const next = projects.map((p) =>
     p.id === projectId
@@ -1020,13 +1040,50 @@ export async function togglePaymentPaid(projectId: string, paymentId: string) {
           ...p,
           payments: p.payments.map((pay) =>
             pay.id === paymentId
-              ? { ...pay, paid: !pay.paid, paidOn: !pay.paid ? now : null }
+              ? { ...pay, paid: markingPaid, paidOn: markingPaid ? now : null }
               : pay
           ),
         }
       : p
   );
   await saveProjects(next);
+
+  // Keep linked invoice in sync (paid ↔ unpaid).
+  if (payment.invoiceId) {
+    const invoices = await getInvoices();
+    const inv = invoices.find((i) => i.id === payment.invoiceId);
+    if (inv && inv.status !== "void") {
+      const updatedAt = new Date().toISOString();
+      let nextStatus = inv.status;
+      let nextPaidAt = inv.paidAt;
+      if (markingPaid) {
+        nextStatus = "paid";
+        nextPaidAt = now;
+      } else if (inv.status === "paid") {
+        // Unpaid on schedule → back to issued (keeps number); draft stays draft.
+        nextStatus = inv.invoiceNumber ? "issued" : "draft";
+        nextPaidAt = null;
+      }
+      if (nextStatus !== inv.status || nextPaidAt !== inv.paidAt) {
+        await saveInvoices(
+          invoices.map((i) =>
+            i.id === payment.invoiceId
+              ? normalizeInvoice({
+                  ...i,
+                  status: nextStatus,
+                  paidAt: nextPaidAt,
+                  updatedAt,
+                })
+              : i
+          )
+        );
+        revalidatePath("/invoices");
+        revalidatePath(`/invoices/${payment.invoiceId}`);
+        if (inv.clientId) revalidatePath(`/clients/${inv.clientId}`);
+      }
+    }
+  }
+
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects");
   revalidatePath("/");
@@ -1044,6 +1101,7 @@ export async function addPayment(
     dueOn: input.dueOn,
     paid: false,
     paidOn: null,
+    invoiceId: null,
   };
   await saveProjects(
     projects.map((p) =>
@@ -1385,6 +1443,8 @@ export type TicketInput = {
   title: string;
   description: string;
   status: TicketStatus;
+  priority?: TicketPriority;
+  tags?: string[];
   dueAt: string | null;
   assigneeKind: TicketParty;
   assigneeId: string | null;
@@ -1399,6 +1459,8 @@ export async function createTicket(projectId: string, input: TicketInput) {
     title: input.title.trim(),
     description: input.description,
     status: input.status,
+    priority: input.priority ?? "Medium",
+    tags: input.tags ?? [],
     createdAt: new Date().toISOString(),
     dueAt: input.dueAt,
     assigneeKind: input.assigneeKind,
@@ -1424,6 +1486,8 @@ export async function updateTicket(id: string, input: TicketInput) {
             title: input.title.trim(),
             description: input.description,
             status: input.status,
+            priority: input.priority ?? t.priority,
+            tags: input.tags ?? t.tags,
             dueAt: input.dueAt,
             assigneeKind: input.assigneeKind,
             assigneeId: input.assigneeId,

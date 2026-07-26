@@ -22,6 +22,10 @@ const en = {
   welcomeTitle: "Welcome to your project portal",
   welcomeContinue: "Got it",
   welcomeHint: "Here’s where we’ll share updates and files for this project.",
+  unpaidInvoiceTitle: "New invoice to pay",
+  unpaidInvoiceBody:
+    "Download the PDF and settle when ready. This notice clears once it’s marked paid.",
+  unpaidInvoiceDownload: "Download PDF",
   goMessages: "Messages",
   goTickets: "Tickets",
   goFiles: "Files",
@@ -131,6 +135,10 @@ const sl: typeof en = {
   welcomeTitle: "Dobrodošli v portalu projekta",
   welcomeContinue: "Razumem",
   welcomeHint: "Tukaj bomo delili novosti in datoteke za ta projekt.",
+  unpaidInvoiceTitle: "Nov račun za plačilo",
+  unpaidInvoiceBody:
+    "Prenesite PDF in poravnajte, ko ste pripravljeni. Obvestilo izgine, ko je račun označen kot plačan.",
+  unpaidInvoiceDownload: "Prenesi PDF",
   goMessages: "Sporočila",
   goTickets: "Naloge",
   goFiles: "Datoteke",

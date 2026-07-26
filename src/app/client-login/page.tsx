@@ -97,7 +97,10 @@ export default async function ClientLoginPage({
             <p className="rounded-md border border-[var(--portal-line)] px-3 py-2 text-sm text-[var(--portal-muted)]">
               Local development mode - auth is off.
             </p>
-            <Button asChild className="h-11 w-full">
+            <Button
+              asChild
+              className="h-11 w-full bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
+            >
               <Link href={nextPath}>Continue</Link>
             </Button>
           </div>
@@ -127,7 +130,10 @@ export default async function ClientLoginPage({
                 className="h-11 bg-[var(--portal-surface)]"
               />
             </div>
-            <Button type="submit" className="h-11 w-full">
+            <Button
+              type="submit"
+              className="h-11 w-full bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
+            >
               {t.loginSend}
             </Button>
           </form>

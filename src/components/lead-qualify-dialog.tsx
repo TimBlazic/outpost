@@ -35,6 +35,7 @@ export function LeadQualifyDialog({
       ) : null}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
+          showCloseButton={false}
           className={cn(
             "fixed inset-3 top-3 bottom-3 left-3 right-3 z-50 flex h-auto max-h-none w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl border bg-background p-0 shadow-2xl sm:inset-4 sm:top-4 sm:right-4 sm:bottom-4 sm:left-4",
             "data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100"

@@ -34,7 +34,13 @@ function money(currency: string, n: number) {
   }).format(n);
 }
 
-export function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
+export function InvoicesTable({
+  invoices,
+  onOpen,
+}: {
+  invoices: Invoice[];
+  onOpen: (id: string) => void;
+}) {
   const { pageRows, page, setPage, pageCount, from, to, total } =
     useClientPagination(invoices);
 
@@ -61,7 +67,7 @@ export function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
         </TableHeader>
         <TableBody>
           {pageRows.map((inv) => (
-            <ClickableRow key={inv.id} href={`/invoices/${inv.id}`}>
+            <ClickableRow key={inv.id} onSelect={() => onOpen(inv.id)}>
               <TableCell>
                 <span className="font-medium">
                   {inv.invoiceNumber || "Draft"}

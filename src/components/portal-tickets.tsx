@@ -350,7 +350,7 @@ export function PortalTickets({
           {project.clientCanCreateTickets && (
             <Button
               size="sm"
-              className="bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-white"
+              className="bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
               onClick={() => {
                 setSelectedId(null);
                 setCreating((v) => !v);
@@ -384,7 +384,7 @@ export function PortalTickets({
             <Button
               size="sm"
               disabled={pending || !title.trim()}
-              className="bg-[var(--portal-accent)] text-[var(--portal-bg)]"
+              className="bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
               onClick={createTicket}
             >
               {t.create}
@@ -392,7 +392,7 @@ export function PortalTickets({
             <Button
               size="sm"
               variant="ghost"
-              className="text-[var(--portal-muted)]"
+              className="text-[var(--portal-muted)] hover:bg-[var(--portal-surface)] hover:text-[var(--portal-fg)]"
               onClick={() => setCreating(false)}
             >
               {t.cancel}

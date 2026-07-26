@@ -6,6 +6,7 @@ import {
   getActivitiesForLead,
   getNotesForLead,
   getAttachmentsFor,
+  getQuotesForLead,
 } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +20,20 @@ export default async function LeadDetailPage({
   const lead = await getLeadById(id);
   if (!lead) notFound();
 
-  const [activities, notes, files] = await Promise.all([
+  const [activities, notes, files, quotes] = await Promise.all([
     getActivitiesForLead(id),
     getNotesForLead(id),
     getAttachmentsFor("lead", id),
+    getQuotesForLead(id),
   ]);
 
   return (
-    <LeadDetail lead={lead} activities={activities} notes={notes} files={files} />
+    <LeadDetail
+      lead={lead}
+      activities={activities}
+      notes={notes}
+      files={files}
+      quotes={quotes}
+    />
   );
 }

@@ -114,6 +114,7 @@ Enable **Places API (New)** on the Google Cloud project. Server-only. Required f
 Also run migrations:
 - `20260726120000_prospects.sql` (Hunt pool)
 - `20260726130000_lead_qualify_score.sql` (fit score on leads)
+- `20260726140000_quotes.sql` (AI quotes / ponudbe)
 
 ## 5. Force file store (optional)
 

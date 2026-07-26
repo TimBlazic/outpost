@@ -8,18 +8,25 @@ import {
   computeInvoiceTotals,
   formatInvoiceNumber,
   normalizeInvoice,
+  paymentAmount,
+  snapshotFromClient,
   type FirmSettings,
   type Invoice,
   type InvoiceClientSnapshot,
   type InvoiceLineItem,
 } from "@/lib/data";
 import {
+  getClientById,
   getFirmSettings,
+  getInvoiceById,
   getInvoices,
+  getProjectById,
+  getProjects,
   saveFirmSettings,
   saveInvoices,
+  saveProjects,
 } from "@/lib/store";
-import { getCurrentUserId } from "@/lib/auth/session";
+import { getCurrentUserId, requireStudioSession } from "@/lib/auth/session";
 import { isSupabaseEnabled } from "@/lib/supabase/env";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -40,6 +47,24 @@ function revalidateInvoices(id?: string, clientId?: string | null) {
     revalidatePath(`/invoices/${id}`);
     revalidatePath(`/invoices/${id}/edit`);
   }
+}
+
+/** Bundle for the invoices list side drawer. */
+export async function getInvoiceDetailAction(id: string) {
+  await requireStudioSession();
+  const invoice = await getInvoiceById(id);
+  if (!invoice) return null;
+  const [settings, project] = await Promise.all([
+    getFirmSettings(),
+    invoice.projectId
+      ? getProjectById(invoice.projectId)
+      : Promise.resolve(null),
+  ]);
+  return {
+    invoice,
+    settings,
+    projectName: project?.name ?? null,
+  };
 }
 
 export type InvoiceInput = {
@@ -82,6 +107,7 @@ export async function createInvoice(input: InvoiceInput) {
     sequence: null,
     status: "draft",
     paidAt: null,
+    paymentId: null,
     createdBy: await getCurrentUserId(),
     createdAt: now,
     updatedAt: now,
@@ -91,6 +117,91 @@ export async function createInvoice(input: InvoiceInput) {
   revalidateInvoices(invoice.id, invoice.clientId);
   revalidateProject(invoice.projectId);
   return invoice.id;
+}
+
+/** Draft invoice for one project installment — does not assign a number. */
+export async function createInvoiceFromPayment(
+  projectId: string,
+  paymentId: string
+): Promise<string> {
+  await requireStudioSession();
+  const projects = await getProjects();
+  const project = projects.find((p) => p.id === projectId);
+  if (!project) throw new Error("Project not found");
+  const payment = project.payments.find((p) => p.id === paymentId);
+  if (!payment) throw new Error("Installment not found");
+  if (payment.invoiceId) return payment.invoiceId;
+
+  const amount = paymentAmount(project.value, payment.percent);
+  if (amount <= 0) throw new Error("Installment amount is zero");
+
+  const client = project.clientId
+    ? ((await getClientById(project.clientId)) ?? null)
+    : null;
+
+  const emptySnap: InvoiceClientSnapshot = {
+    name: "",
+    email: "",
+    companyName: project.client,
+    address: "",
+    vatId: "",
+    taxNumber: "",
+    registrationNumber: "",
+  };
+  const clientSnapshot = client ? snapshotFromClient(client) : emptySnap;
+  if (!clientSnapshot.companyName.trim()) {
+    clientSnapshot.companyName = project.client;
+  }
+
+  const description = `${payment.label} (${payment.percent}%) — ${project.name}`;
+  const invoiceId = await createInvoice({
+    clientId: project.clientId,
+    projectId: project.id,
+    clientSnapshot,
+    issueDate: today(),
+    dueDate: payment.dueOn || today(),
+    currency: "EUR",
+    lineItems: [
+      {
+        description,
+        qty: 1,
+        unit: "service",
+        unitPrice: amount,
+        taxRate: 0,
+      },
+    ],
+    notes: "",
+  });
+
+  const invoices = await getInvoices();
+  await saveInvoices(
+    invoices.map((i) =>
+      i.id === invoiceId
+        ? normalizeInvoice({
+            ...i,
+            paymentId,
+            updatedAt: new Date().toISOString(),
+          })
+        : i
+    )
+  );
+
+  await saveProjects(
+    projects.map((p) =>
+      p.id === projectId
+        ? {
+            ...p,
+            payments: p.payments.map((pay) =>
+              pay.id === paymentId ? { ...pay, invoiceId } : pay
+            ),
+          }
+        : p
+    )
+  );
+
+  revalidateInvoices(invoiceId, project.clientId);
+  revalidatePath(`/projects/${projectId}`);
+  return invoiceId;
 }
 
 export async function updateInvoice(id: string, input: InvoiceInput) {
@@ -154,18 +265,38 @@ export async function markInvoicePaid(id: string) {
   if (existing.status !== "issued") {
     throw new Error("Only issued invoices can be marked paid");
   }
+  const paidOn = today();
   await saveInvoices(
     invoices.map((i) =>
       i.id === id
         ? normalizeInvoice({
             ...i,
             status: "paid",
-            paidAt: today(),
+            paidAt: paidOn,
             updatedAt: new Date().toISOString(),
           })
         : i
     )
   );
+
+  if (existing.projectId) {
+    const projects = await getProjects();
+    await saveProjects(
+      projects.map((p) =>
+        p.id === existing.projectId
+          ? {
+              ...p,
+              payments: p.payments.map((pay) =>
+                pay.id === existing.paymentId || pay.invoiceId === id
+                  ? { ...pay, paid: true, paidOn }
+                  : pay
+              ),
+            }
+          : p
+      )
+    );
+  }
+
   revalidateInvoices(id, existing.clientId);
   revalidateProject(existing.projectId);
 }
@@ -195,11 +326,35 @@ export async function deleteInvoice(id: string) {
   const invoices = await getInvoices();
   const existing = invoices.find((i) => i.id === id);
   if (!existing) throw new Error("Invoice not found");
-  if (existing.status !== "draft" && existing.status !== "void") {
-    throw new Error("Only draft or void invoices can be deleted");
-  }
+
   await saveInvoices(invoices.filter((i) => i.id !== id));
+
+  // Unlink installment so "Invoice this" can create a new draft.
+  if (existing.projectId) {
+    const projects = await getProjects();
+    await saveProjects(
+      projects.map((p) =>
+        p.id === existing.projectId
+          ? {
+              ...p,
+              payments: p.payments.map((pay) =>
+                pay.id === existing.paymentId || pay.invoiceId === id
+                  ? {
+                      ...pay,
+                      invoiceId: null,
+                      paid: false,
+                      paidOn: null,
+                    }
+                  : pay
+              ),
+            }
+          : p
+      )
+    );
+  }
+
   revalidateInvoices(undefined, existing.clientId);
+  revalidateProject(existing.projectId);
 }
 
 export async function uploadInvoiceSignature(formData: FormData) {

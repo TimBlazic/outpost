@@ -570,6 +570,7 @@ export function PortalChat({
   compact,
   channelTitle,
   channelSubtitle,
+  hideChannelHeader,
   onMarkedRead,
 }: {
   projectId: string;
@@ -588,6 +589,8 @@ export function PortalChat({
   compact?: boolean;
   channelTitle?: string;
   channelSubtitle?: string;
+  /** Hide the built-in channel header (e.g. when wrapped in a dock). */
+  hideChannelHeader?: boolean;
   /** Fired when this open thread is marked read (sync). */
   onMarkedRead?: () => void;
 }) {
@@ -1018,6 +1021,11 @@ export function PortalChat({
                     setEditingId(null);
                     setEditBody("");
                   }}
+                  className={
+                    portal
+                      ? "text-[var(--portal-muted)] hover:bg-[var(--portal-surface)] hover:text-[var(--portal-fg)]"
+                      : undefined
+                  }
                 >
                   Cancel
                 </Button>
@@ -1025,6 +1033,11 @@ export function PortalChat({
                   size="sm"
                   disabled={pending || !editBody.trim()}
                   onClick={() => saveEdit(message.id)}
+                  className={
+                    portal
+                      ? "bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
+                      : undefined
+                  }
                 >
                   Save
                 </Button>
@@ -1153,7 +1166,7 @@ export function PortalChat({
         className
       )}
     >
-      {(channelTitle || channelSubtitle || !portal) && (
+      {!hideChannelHeader && (channelTitle || channelSubtitle || !portal) && (
         <header
           className={cn(
             "flex shrink-0 items-center gap-3 border-b px-4 py-3",
@@ -1201,7 +1214,7 @@ export function PortalChat({
       <div
         className={cn(
           "min-h-0 flex-1 overflow-y-auto",
-          compact ? "max-h-[32rem]" : ""
+          compact && !hideChannelHeader ? "max-h-[32rem]" : ""
         )}
       >
         {topLevel.length === 0 ? (
@@ -1352,6 +1365,11 @@ export function PortalChat({
                               setReplyBody("");
                               setReplyFiles([]);
                             }}
+                            className={
+                              portal
+                                ? "text-[var(--portal-muted)] hover:bg-[var(--portal-surface)] hover:text-[var(--portal-fg)]"
+                                : undefined
+                            }
                           >
                             Cancel
                           </Button>
@@ -1363,6 +1381,11 @@ export function PortalChat({
                             }
                             onClick={() =>
                               submit(replyBody, m.id, replyFiles)
+                            }
+                            className={
+                              portal
+                                ? "bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
+                                : undefined
                             }
                           >
                             Reply
@@ -1445,7 +1468,7 @@ export function PortalChat({
               className={cn(
                 "h-8 gap-1.5 px-3",
                 portal &&
-                  "bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:opacity-90"
+                  "bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
               )}
             >
               <Send className="size-3.5" />

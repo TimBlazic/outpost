@@ -21,6 +21,7 @@ import {
   type Attachment,
   type Lead,
   type Note,
+  type Quote,
 } from "@/lib/data";
 import { getLeadDetailAction } from "@/lib/actions";
 import { eur, fmtDate, dueState, leadStatusColor } from "@/lib/format";
@@ -55,6 +56,7 @@ import {
   stickyTableHeaderClass,
   useClientPagination,
 } from "@/components/paginated-data-table";
+import { SidePanel } from "@/components/side-panel";
 import {
   Table,
   TableBody,
@@ -63,58 +65,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-function LeadSidePanel({
-  open,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setVisible(false);
-      return;
-    }
-    const id = requestAnimationFrame(() => setVisible(true));
-    return () => cancelAnimationFrame(id);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div
-        className={cn(
-          "absolute inset-0 bg-black/30 backdrop-blur-[2px] transition-opacity duration-200",
-          visible ? "opacity-100" : "opacity-0"
-        )}
-        onClick={onClose}
-      />
-      <div
-        className={cn(
-          "relative z-10 m-3 flex h-[calc(100vh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl transition-transform duration-300 ease-out",
-          visible ? "translate-x-0" : "translate-x-full"
-        )}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
 
 export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
   const router = useRouter();
@@ -154,6 +104,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
     activities: Activity[];
     notes: Note[];
     files: Attachment[];
+    quotes: Quote[];
   } | null>(null);
   const [bundleLoading, setBundleLoading] = useState(false);
 
@@ -209,6 +160,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
         activities: data.activities,
         notes: data.notes,
         files: data.files,
+        quotes: data.quotes,
       });
     } finally {
       setBundleLoading(false);
@@ -541,13 +493,14 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
         </TabsContent>
       </Tabs>
 
-      <LeadSidePanel open={Boolean(selectedId)} onClose={closePanel}>
+      <SidePanel open={Boolean(selectedId)} onClose={closePanel}>
         {selectedLead && bundle ? (
           <LeadDetail
             lead={selectedLead}
             activities={bundle.activities}
             notes={bundle.notes}
             files={bundle.files}
+            quotes={bundle.quotes}
             mode="drawer"
             onClose={closePanel}
             onChanged={() => {
@@ -559,7 +512,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
             {bundleLoading || selectedId ? "Loading lead…" : null}
           </div>
         )}
-      </LeadSidePanel>
+      </SidePanel>
     </>
   );
 }

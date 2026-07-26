@@ -36,6 +36,13 @@ function followUpDate(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+export type StudioEmailAttachment = {
+  filename: string;
+  /** Raw bytes or base64 string (Resend accepts both). */
+  content: Buffer | Uint8Array | string;
+  contentType?: string;
+};
+
 export type SendStudioEmailInput = {
   to: string;
   subject: string;
@@ -44,6 +51,7 @@ export type SendStudioEmailInput = {
   leadId?: string | null;
   /** Override follow-up offset; default 3 days. Null = don't change follow-up. */
   followUpInDays?: number | null;
+  attachments?: StudioEmailAttachment[];
 };
 
 export async function sendStudioEmail(
@@ -79,6 +87,15 @@ export async function sendStudioEmail(
 
   const signed = appendStudioEmailSignature(body);
 
+  const attachments = (input.attachments ?? []).map((a) => ({
+    filename: a.filename,
+    content:
+      typeof a.content === "string"
+        ? a.content
+        : Buffer.from(a.content).toString("base64"),
+    contentType: a.contentType,
+  }));
+
   const resend = getResend();
   const { data, error } = await resend.emails.send({
     from,
@@ -88,6 +105,7 @@ export async function sendStudioEmail(
     subject,
     text: signed.text,
     html: signed.html,
+    ...(attachments.length ? { attachments } : {}),
   });
 
   if (error) {

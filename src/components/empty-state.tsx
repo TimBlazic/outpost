@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,8 @@ export function EmptyState({
   description,
   actionLabel,
   actionHref,
+  action,
+  children,
   className,
 }: {
   icon: LucideIcon;
@@ -17,6 +20,9 @@ export function EmptyState({
   description: string;
   actionLabel?: string;
   actionHref?: string;
+  /** Custom action node (e.g. button) — preferred over actionHref when both set. */
+  action?: ReactNode;
+  children?: ReactNode;
   className?: string;
 }) {
   return (
@@ -33,11 +39,14 @@ export function EmptyState({
       <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
         {description}
       </p>
-      {actionLabel && actionHref && (
+      {action ? (
+        <div className="mt-5">{action}</div>
+      ) : actionLabel && actionHref ? (
         <Button asChild className="mt-5" size="sm">
           <Link href={actionHref}>{actionLabel}</Link>
         </Button>
-      )}
+      ) : null}
+      {children}
     </div>
   );
 }

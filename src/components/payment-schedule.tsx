@@ -1,45 +1,74 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Plus, Trash2, CircleDollarSign, Pencil } from "lucide-react";
+import {
+  Check,
+  Plus,
+  Trash2,
+  CircleDollarSign,
+  Pencil,
+  FileText,
+  Loader2,
+} from "lucide-react";
 
-import { type Payment, paymentAmount } from "@/lib/data";
+import {
+  type Invoice,
+  type Payment,
+  paymentAmount,
+} from "@/lib/data";
 import {
   togglePaymentPaid,
   addPayment,
   updatePayment,
   removePayment,
 } from "@/lib/actions";
+import { createInvoiceFromPayment } from "@/lib/invoices/actions";
 import { eur, fmtDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { StatusPill } from "@/components/status-pill";
+
+const invTone: Record<Invoice["status"], string> = {
+  draft: "bg-muted text-muted-foreground",
+  issued: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
+  paid: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+  void: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200",
+};
 
 export function PaymentSchedule({
   projectId,
   value,
   payments,
+  invoices = [],
   variant = "card",
+  onOpenInvoice,
 }: {
   projectId: string;
   value: number;
   payments: Payment[];
+  invoices?: Invoice[];
   variant?: "card" | "plain";
+  onOpenInvoice?: (invoiceId: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [busyPaymentId, setBusyPaymentId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [percent, setPercent] = useState("");
   const [dueOn, setDueOn] = useState("");
 
+  const invoicesById = Object.fromEntries(invoices.map((i) => [i.id, i]));
+
   const scheduledPct = payments.reduce((s, p) => s + p.percent, 0);
   const paid = payments
     .filter((p) => p.paid)
     .reduce((s, p) => s + paymentAmount(value, p.percent), 0);
-  const paidPct = Math.round((paid / value) * 100);
+  const paidPct = value > 0 ? Math.round((paid / value) * 100) : 0;
   const outstanding = value - paid;
 
   function resetForm() {
@@ -76,12 +105,28 @@ export function PaymentSchedule({
     });
   }
 
+  function invoiceThis(paymentId: string) {
+    setError(null);
+    setBusyPaymentId(paymentId);
+    startTransition(async () => {
+      try {
+        const id = await createInvoiceFromPayment(projectId, paymentId);
+        onOpenInvoice?.(id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not create invoice");
+      } finally {
+        setBusyPaymentId(null);
+      }
+    });
+  }
+
   const body = (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         {variant === "plain" ? (
           <p className="text-sm text-muted-foreground">
-            Track deposits and installments against the project value
+            Track deposits and installments — Invoice this creates one draft at
+            a time
           </p>
         ) : (
           <div className="flex items-center gap-2 text-base font-semibold">
@@ -103,6 +148,12 @@ export function PaymentSchedule({
           <Plus className="size-4" /> Add installment
         </Button>
       </div>
+
+      {error ? (
+        <p className="text-sm text-rose-600" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <div>
         <div className="flex items-end justify-between">
@@ -187,15 +238,22 @@ export function PaymentSchedule({
       >
         {payments.map((p) => {
           const amount = paymentAmount(value, p.percent);
+          const inv = p.invoiceId ? invoicesById[p.invoiceId] : null;
+          const statusLabel = p.paid
+            ? "paid"
+            : inv
+              ? inv.status
+              : "no invoice";
           return (
             <div
               key={p.id}
               className={cn(
-                "flex items-center gap-3",
+                "flex flex-wrap items-center gap-3",
                 variant === "plain" ? "px-4 py-3" : "py-2.5"
               )}
             >
               <button
+                type="button"
                 onClick={() =>
                   startTransition(() => togglePaymentPaid(projectId, p.id))
                 }
@@ -211,11 +269,25 @@ export function PaymentSchedule({
                 {p.paid && <Check className="size-3.5" />}
               </button>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{p.label}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium">{p.label}</p>
+                  <StatusPill
+                    label={statusLabel}
+                    className={cn(
+                      "capitalize",
+                      p.paid
+                        ? invTone.paid
+                        : inv
+                          ? invTone[inv.status]
+                          : "bg-muted text-muted-foreground"
+                    )}
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {p.percent}%
                   {p.dueOn && ` · due ${fmtDate(p.dueOn)}`}
                   {p.paid && p.paidOn && ` · paid ${fmtDate(p.paidOn)}`}
+                  {inv?.invoiceNumber ? ` · ${inv.invoiceNumber}` : null}
                 </p>
               </div>
               <span
@@ -226,7 +298,36 @@ export function PaymentSchedule({
               >
                 {eur(amount)}
               </span>
+              {onOpenInvoice ? (
+                p.invoiceId ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => onOpenInvoice(p.invoiceId!)}
+                  >
+                    <FileText className="size-3.5" />
+                    Open
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={pending || p.paid}
+                    onClick={() => invoiceThis(p.id)}
+                  >
+                    {busyPaymentId === p.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <FileText className="size-3.5" />
+                    )}
+                    Invoice this
+                  </Button>
+                )
+              ) : null}
               <button
+                type="button"
                 onClick={() => startEdit(p)}
                 disabled={pending}
                 aria-label="Edit installment"
@@ -235,6 +336,7 @@ export function PaymentSchedule({
                 <Pencil className="size-4" />
               </button>
               <button
+                type="button"
                 onClick={() =>
                   startTransition(() => removePayment(projectId, p.id))
                 }
@@ -249,7 +351,7 @@ export function PaymentSchedule({
         })}
         {payments.length === 0 && (
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-            No payment schedule yet. Add installments like 20% / 50% / 30%.
+            No payment schedule yet. Add installments like 30% / 30% / 40%.
           </p>
         )}
       </div>

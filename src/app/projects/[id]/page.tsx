@@ -194,14 +194,21 @@ async function renderClientPortal(id: string) {
   const theme = await getPortalTheme();
   const me = await getCurrentProfile();
 
-  const [tickets, files, members, messages] = await Promise.all([
+  const [tickets, files, members, messages, allInvoices] = await Promise.all([
     project.clientCanViewTickets
       ? portalGetTickets(project.id)
       : Promise.resolve([]),
     portalGetProjectFiles(project.id),
     portalGetTeamMembers(),
     portalGetMessages(project.id),
+    getInvoices(),
   ]);
+  const unpaidInvoices = allInvoices.filter(
+    (i) =>
+      i.projectId === project.id &&
+      i.status === "issued" &&
+      !i.paidAt
+  );
 
   const messageIds = messages.map((m) => m.id);
   const ticketIds = tickets.map((t) => t.id);
@@ -250,6 +257,7 @@ async function renderClientPortal(id: string) {
         theme={theme}
         viewer="session"
         locale={client.portalLocale}
+        unpaidInvoices={unpaidInvoices}
         clientAuthor={{
           id: me.id,
           name:

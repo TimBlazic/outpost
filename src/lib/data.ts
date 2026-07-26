@@ -750,12 +750,17 @@ export type TicketStatus = (typeof ticketStatuses)[number];
 
 export type TicketParty = "studio" | "client";
 
+export const ticketPriorities = ["Low", "Medium", "High"] as const;
+export type TicketPriority = (typeof ticketPriorities)[number];
+
 export type Ticket = {
   id: string;
   projectId: string;
   title: string;
   description: string;
   status: TicketStatus;
+  priority: TicketPriority;
+  tags: string[];
   createdAt: string;
   dueAt: string | null;
   assigneeKind: TicketParty;
@@ -772,6 +777,8 @@ export const ticketsSeed: Ticket[] = [
     description:
       "Please check the hero and pricing copy on staging.\n\n- Tone OK?\n- Any missing CTAs?",
     status: "Waiting on client",
+    priority: "Medium",
+    tags: ["copy", "client"],
     createdAt: "2026-07-10T09:00:00.000Z",
     dueAt: "2026-07-18",
     assigneeKind: "client",
@@ -785,6 +792,8 @@ export const ticketsSeed: Ticket[] = [
     title: "Wire auth redirect after signup",
     description: "Users land on blank page after email confirm.",
     status: "In progress",
+    priority: "High",
+    tags: ["auth", "bug"],
     createdAt: "2026-07-12T11:00:00.000Z",
     dueAt: "2026-07-22",
     assigneeKind: "studio",
@@ -1100,7 +1109,53 @@ export type Payment = {
   dueOn: string | null;
   paid: boolean;
   paidOn: string | null;
+  /** Linked invoice created via Invoice this (null until created). */
+  invoiceId: string | null;
 };
+
+/** Default installments for a new project (no invoice rows yet). */
+export function defaultPaymentSchedule(value: number): Array<
+  Omit<Payment, "id">
+> {
+  if (value > 500) {
+    return [
+      {
+        label: "Deposit",
+        percent: 30,
+        dueOn: null,
+        paid: false,
+        paidOn: null,
+        invoiceId: null,
+      },
+      {
+        label: "Midway",
+        percent: 30,
+        dueOn: null,
+        paid: false,
+        paidOn: null,
+        invoiceId: null,
+      },
+      {
+        label: "Final",
+        percent: 40,
+        dueOn: null,
+        paid: false,
+        paidOn: null,
+        invoiceId: null,
+      },
+    ];
+  }
+  return [
+    {
+      label: "Full payment",
+      percent: 100,
+      dueOn: null,
+      paid: false,
+      paidOn: null,
+      invoiceId: null,
+    },
+  ];
+}
 
 export type Project = {
   id: string;
@@ -1207,9 +1262,16 @@ export function normalizeProject(p: Project): Project {
 }
 
 export function normalizeTicket(t: Ticket): Ticket {
+  const priority = ticketPriorities.includes(t.priority as TicketPriority)
+    ? (t.priority as TicketPriority)
+    : "Medium";
   return {
     ...t,
     description: t.description ?? "",
+    priority,
+    tags: Array.isArray(t.tags)
+      ? t.tags.map((x) => String(x).trim()).filter(Boolean)
+      : [],
     dueAt: t.dueAt ?? null,
     assigneeId: t.assigneeId ?? null,
     createdByName: t.createdByName ?? "",
@@ -1268,9 +1330,9 @@ export const projects: Project[] = [
     stagingUrl: "https://pulse-staging.example.com",
     portalIntro: "Here’s where we’re at — staging is live for review.",
     payments: [
-      { id: "p1-1", label: "Deposit", percent: 20, dueOn: "2026-05-25", paid: true, paidOn: "2026-05-24" },
-      { id: "p1-2", label: "Midway", percent: 50, dueOn: "2026-06-20", paid: false, paidOn: null },
-      { id: "p1-3", label: "Final", percent: 30, dueOn: "2026-07-15", paid: false, paidOn: null },
+      { id: "p1-1", label: "Deposit", percent: 20, dueOn: "2026-05-25", paid: true, paidOn: "2026-05-24", invoiceId: null },
+      { id: "p1-2", label: "Midway", percent: 50, dueOn: "2026-06-20", paid: false, paidOn: null, invoiceId: null },
+      { id: "p1-3", label: "Final", percent: 30, dueOn: "2026-07-15", paid: false, paidOn: null, invoiceId: null },
     ],
   },
   {
@@ -1278,8 +1340,8 @@ export const projects: Project[] = [
     ...portalDefaults,
     phase: "Handoff",
     payments: [
-      { id: "p2-1", label: "Deposit", percent: 50, dueOn: "2026-03-10", paid: true, paidOn: "2026-03-09" },
-      { id: "p2-2", label: "Final", percent: 50, dueOn: "2026-04-12", paid: true, paidOn: "2026-04-10" },
+      { id: "p2-1", label: "Deposit", percent: 50, dueOn: "2026-03-10", paid: true, paidOn: "2026-03-09", invoiceId: null },
+      { id: "p2-2", label: "Final", percent: 50, dueOn: "2026-04-12", paid: true, paidOn: "2026-04-10", invoiceId: null },
     ],
   },
   {
@@ -1287,9 +1349,9 @@ export const projects: Project[] = [
     ...portalDefaults,
     phase: "Build",
     payments: [
-      { id: "p3-1", label: "Deposit", percent: 30, dueOn: "2026-04-01", paid: true, paidOn: "2026-03-30" },
-      { id: "p3-2", label: "Milestone 1", percent: 40, dueOn: "2026-06-01", paid: false, paidOn: null },
-      { id: "p3-3", label: "Final", percent: 30, dueOn: "2026-08-01", paid: false, paidOn: null },
+      { id: "p3-1", label: "Deposit", percent: 30, dueOn: "2026-04-01", paid: true, paidOn: "2026-03-30", invoiceId: null },
+      { id: "p3-2", label: "Milestone 1", percent: 40, dueOn: "2026-06-01", paid: false, paidOn: null, invoiceId: null },
+      { id: "p3-3", label: "Final", percent: 30, dueOn: "2026-08-01", paid: false, paidOn: null, invoiceId: null },
     ],
   },
   {
@@ -1297,8 +1359,8 @@ export const projects: Project[] = [
     ...portalDefaults,
     phase: "Review",
     payments: [
-      { id: "p4-1", label: "Deposit", percent: 50, dueOn: "2026-05-02", paid: true, paidOn: "2026-05-01" },
-      { id: "p4-2", label: "Final", percent: 50, dueOn: "2026-06-20", paid: false, paidOn: null },
+      { id: "p4-1", label: "Deposit", percent: 50, dueOn: "2026-05-02", paid: true, paidOn: "2026-05-01", invoiceId: null },
+      { id: "p4-2", label: "Final", percent: 50, dueOn: "2026-06-20", paid: false, paidOn: null, invoiceId: null },
     ],
   },
   {
@@ -1312,7 +1374,7 @@ export const projects: Project[] = [
     ...portalDefaults,
     phase: "Maintenance",
     payments: [
-      { id: "p6-1", label: "Annual fee", percent: 100, dueOn: "2026-02-01", paid: true, paidOn: "2026-02-01" },
+      { id: "p6-1", label: "Annual fee", percent: 100, dueOn: "2026-02-01", paid: true, paidOn: "2026-02-01", invoiceId: null },
     ],
   },
   {
@@ -1320,8 +1382,8 @@ export const projects: Project[] = [
     ...portalDefaults,
     phase: "Handoff",
     payments: [
-      { id: "p7-1", label: "Deposit", percent: 50, dueOn: "2026-01-15", paid: true, paidOn: "2026-01-14" },
-      { id: "p7-2", label: "Final", percent: 50, dueOn: "2026-02-20", paid: true, paidOn: "2026-02-26" },
+      { id: "p7-1", label: "Deposit", percent: 50, dueOn: "2026-01-15", paid: true, paidOn: "2026-01-14", invoiceId: null },
+      { id: "p7-2", label: "Final", percent: 50, dueOn: "2026-02-20", paid: true, paidOn: "2026-02-26", invoiceId: null },
     ],
   },
 ];
@@ -1584,6 +1646,8 @@ export type FirmSettings = {
   invoicePrefix: string;
   /** year (string) → next sequence number */
   invoiceNextSequenceByYear: Record<string, number>;
+  /** year (string) → next quote sequence number */
+  quoteNextSequenceByYear: Record<string, number>;
   defaultCurrency: "EUR" | "USD" | "GBP";
   defaultPaymentTermsDays: number;
   /** Editable system prompt for AI lead emails. Empty → app default. */
@@ -1622,6 +1686,7 @@ export const defaultFirmSettings: FirmSettings = {
   signaturePath: null,
   invoicePrefix: "",
   invoiceNextSequenceByYear: {},
+  quoteNextSequenceByYear: {},
   defaultCurrency: "EUR",
   defaultPaymentTermsDays: 14,
   aiEmailSystemPrompt: "",
@@ -1635,6 +1700,7 @@ export function normalizeFirmSettings(s: FirmSettings): FirmSettings {
     ...s,
     signaturePath: s.signaturePath ?? null,
     invoiceNextSequenceByYear: s.invoiceNextSequenceByYear ?? {},
+    quoteNextSequenceByYear: s.quoteNextSequenceByYear ?? {},
     defaultCurrency: s.defaultCurrency ?? "EUR",
     defaultPaymentTermsDays: s.defaultPaymentTermsDays ?? 14,
     aiEmailSystemPrompt: s.aiEmailSystemPrompt ?? "",
@@ -1673,6 +1739,8 @@ export type Invoice = {
   clientId: string | null;
   /** Optional link to a delivery project (same client). */
   projectId: string | null;
+  /** Optional link to a project payment installment. */
+  paymentId: string | null;
   clientSnapshot: InvoiceClientSnapshot;
   invoiceNumber: string | null;
   year: number | null;
@@ -1750,6 +1818,7 @@ export function normalizeInvoice(inv: Invoice): Invoice {
     year: inv.year ?? null,
     sequence: inv.sequence ?? null,
     projectId: inv.projectId ?? null,
+    paymentId: inv.paymentId ?? null,
     paidAt: inv.paidAt ?? null,
     createdBy: inv.createdBy ?? null,
   };
@@ -1766,6 +1835,96 @@ export function formatInvoiceNumber(year: number, sequence: number) {
   const yy = String(year).slice(-2);
   const nnnn = String(sequence).padStart(4, "0");
   return `${yy}-${nnnn}`;
+}
+
+// ---- Quotes (ponudbe) -----------------------------------------------------
+
+export const quoteStatuses = ["draft", "sent", "accepted", "declined"] as const;
+export type QuoteStatus = (typeof quoteStatuses)[number];
+
+export type QuoteLineItem = {
+  description: string;
+  amount: number;
+};
+
+export type Quote = {
+  id: string;
+  leadId: string | null;
+  status: QuoteStatus;
+  locale: "sl" | "en";
+  number: string | null;
+  year: number | null;
+  sequence: number | null;
+  clientName: string;
+  clientCompany: string;
+  clientEmail: string;
+  intro: string;
+  scope: string;
+  notes: string;
+  discoveryNotes: string;
+  /** Free-text estimate, e.g. "3–4 tedne". Empty = omit from quote. */
+  projectDuration: string;
+  lineItems: QuoteLineItem[];
+  currency: "EUR";
+  subtotal: number;
+  total: number;
+  validUntil: string | null;
+  sentAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function computeQuoteTotals(items: QuoteLineItem[]) {
+  const subtotal = items.reduce((s, i) => {
+    const n = Number(i.amount);
+    return s + (Number.isFinite(n) ? n : 0);
+  }, 0);
+  const rounded = Math.round(subtotal * 100) / 100;
+  return { subtotal: rounded, total: rounded };
+}
+
+export function normalizeQuote(q: Quote): Quote {
+  const lineItems = (q.lineItems ?? []).map((l) => ({
+    description: (l.description ?? "").trim(),
+    amount: Number.isFinite(Number(l.amount)) ? Number(l.amount) : 0,
+  }));
+  const totals = computeQuoteTotals(lineItems);
+  const locale = q.locale === "en" ? "en" : "sl";
+  const status = (quoteStatuses as readonly string[]).includes(q.status)
+    ? q.status
+    : "draft";
+  return {
+    ...q,
+    status,
+    locale,
+    leadId: q.leadId ?? null,
+    number: q.number ?? null,
+    year: q.year ?? null,
+    sequence: q.sequence ?? null,
+    clientName: q.clientName ?? "",
+    clientCompany: q.clientCompany ?? "",
+    clientEmail: q.clientEmail ?? "",
+    intro: q.intro ?? "",
+    scope: q.scope ?? "",
+    notes: q.notes ?? "",
+    discoveryNotes: q.discoveryNotes ?? "",
+    projectDuration: (q.projectDuration ?? "").trim(),
+    lineItems,
+    currency: "EUR",
+    subtotal: totals.subtotal,
+    total: totals.total,
+    validUntil: q.validUntil ?? null,
+    sentAt: q.sentAt ?? null,
+    createdBy: q.createdBy ?? null,
+  };
+}
+
+/** Quote number: 2026 / seq 1 → P-26-0001 */
+export function formatQuoteNumber(year: number, sequence: number) {
+  const yy = String(year).slice(-2);
+  const nnnn = String(sequence).padStart(4, "0");
+  return `P-${yy}-${nnnn}`;
 }
 
 /** @deprecated Use firm settings */

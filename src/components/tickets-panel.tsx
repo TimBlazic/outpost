@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { KanbanSquare, ListTodo, Plus } from "lucide-react";
+import { KanbanSquare, ListTodo, Plus, Sparkles } from "lucide-react";
 
 import {
   members as seedMembers,
@@ -39,8 +39,17 @@ import {
   TicketStatusBadge,
   ticketShortId,
 } from "@/components/ticket-status-badge";
+import {
+  TicketPriorityPill,
+  TicketTags,
+} from "@/components/ticket-priority";
 import { EmptyState } from "@/components/empty-state";
-import { DataTable } from "@/components/data-table";
+import { GenerateTicketsDialog } from "@/components/generate-tickets-dialog";
+import {
+  PaginatedDataTable,
+  stickyTableHeaderClass,
+  useClientPagination,
+} from "@/components/paginated-data-table";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -51,6 +60,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+const BOARD_SHELL =
+  "mt-0 h-[min(36rem,calc(100dvh-16rem))] min-h-[20rem] flex flex-col overflow-hidden data-[state=inactive]:hidden";
 
 function relativeFromIso(iso: string) {
   const ts = Date.parse(iso);
@@ -85,19 +97,29 @@ function TicketCard({
   return (
     <div
       className={cn(
-        "cursor-pointer rounded-lg border border-border bg-background p-3 transition-colors hover:border-primary/30",
+        "cursor-pointer rounded-xl border border-border/80 bg-background p-3 shadow-xs transition-colors hover:border-primary/25",
         dragging && "rotate-1 shadow-lg ring-2 ring-primary/30"
       )}
     >
-      <p className="text-sm font-medium leading-snug text-foreground">
-        {ticket.title}
-      </p>
-      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-semibold leading-snug text-foreground">
+          {ticket.title}
+        </p>
+        <TicketPriorityPill priority={ticket.priority} className="shrink-0" />
+      </div>
+      {ticket.description?.trim() ? (
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+          {ticket.description}
+        </p>
+      ) : null}
+      <TicketTags tags={ticket.tags} className="mt-2" />
+      <div className="mt-2.5 flex items-center gap-2 text-[10px] text-muted-foreground">
         <span className="font-mono">{ticketShortId(ticket.id)}</span>
         {assignee && <span className="ml-auto truncate">{assignee}</span>}
         {ticket.dueAt && (
           <span
             className={cn(
+              !assignee && "ml-auto",
               dueState(ticket.dueAt) === "overdue" && "font-medium text-rose-600"
             )}
           >
@@ -159,22 +181,22 @@ function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex min-h-40 min-w-[240px] flex-1 flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-2",
-        isOver && "ring-2 ring-primary/30"
-      )}
-    >
-      <div className="flex items-center justify-between px-1 py-1.5">
+    <div className="flex h-full w-72 shrink-0 flex-col">
+      <div className="mb-2 flex shrink-0 items-center justify-between px-1">
         <TicketStatusBadge status={status} size="xs" />
         <span className="text-xs text-muted-foreground">{tickets.length}</span>
       </div>
-      <SortableContext
-        items={tickets.map((t) => t.id)}
-        strategy={verticalListSortingStrategy}
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-xl border border-border/70 bg-muted/20 p-2 transition-colors",
+          isOver && "bg-primary/10 ring-2 ring-primary/25"
+        )}
       >
-        <div className="flex flex-col gap-2">
+        <SortableContext
+          items={tickets.map((t) => t.id)}
+          strategy={verticalListSortingStrategy}
+        >
           {tickets.map((t) => (
             <SortableTicketCard
               key={t.id}
@@ -183,8 +205,13 @@ function KanbanColumn({
               onOpen={onOpen}
             />
           ))}
-        </div>
-      </SortableContext>
+        </SortableContext>
+        {tickets.length === 0 ? (
+          <p className="px-1 py-8 text-center text-xs text-muted-foreground">
+            Drop here
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -243,6 +270,7 @@ function TicketSidePanel({
 
 export function TicketsPanel({
   projectId,
+  projectName,
   tickets,
   ticketFiles = {},
   ticketComments = {},
@@ -253,6 +281,7 @@ export function TicketsPanel({
   currentUserName,
 }: {
   projectId: string;
+  projectName?: string;
   tickets: Ticket[];
   ticketFiles?: Record<string, Attachment[]>;
   ticketComments?: Record<string, TicketComment[]>;
@@ -265,8 +294,10 @@ export function TicketsPanel({
   const [, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [local, setLocal] = useState(tickets);
+  const suppressOpenRef = useRef(false);
 
   useEffect(() => {
     setLocal(tickets);
@@ -277,8 +308,18 @@ export function TicketsPanel({
     [local, selectedId]
   );
 
+  const {
+    pageRows,
+    page,
+    setPage,
+    pageCount,
+    from,
+    to,
+    total,
+  } = useClientPagination(local, 15, projectId);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
   const byStatus = useMemo(() => {
@@ -290,6 +331,7 @@ export function TicketsPanel({
   }, [local]);
 
   function openTicket(id: string) {
+    if (suppressOpenRef.current) return;
     setCreating(false);
     setSelectedId(id);
   }
@@ -300,6 +342,7 @@ export function TicketsPanel({
   }
 
   function onDragStart(e: DragStartEvent) {
+    suppressOpenRef.current = true;
     setActiveId(String(e.active.id));
   }
 
@@ -307,13 +350,18 @@ export function TicketsPanel({
     setActiveId(null);
     const ticketId = String(e.active.id);
     const overId = e.over?.id;
+    window.setTimeout(() => {
+      suppressOpenRef.current = false;
+    }, 0);
+
     if (!overId) return;
 
     let nextStatus: TicketStatus | null = null;
-    if (ticketStatuses.includes(overId as TicketStatus)) {
-      nextStatus = overId as TicketStatus;
+    const overKey = String(overId);
+    if ((ticketStatuses as readonly string[]).includes(overKey)) {
+      nextStatus = overKey as TicketStatus;
     } else {
-      const overTicket = local.find((t) => t.id === String(overId));
+      const overTicket = local.find((t) => t.id === overKey);
       if (overTicket) nextStatus = overTicket.status;
     }
     if (!nextStatus) return;
@@ -341,26 +389,42 @@ export function TicketsPanel({
         <p className="text-sm text-muted-foreground">
           {local.length} ticket{local.length === 1 ? "" : "s"}
         </p>
-        <Button
-          size="sm"
-          onClick={() => {
-            setSelectedId(null);
-            setCreating(true);
-          }}
-        >
-          <Plus className="size-3.5" />
-          New ticket
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setGenerateOpen(true)}
+          >
+            <Sparkles className="size-3.5" />
+            Generate tickets
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setSelectedId(null);
+              setCreating(true);
+            }}
+          >
+            <Plus className="size-3.5" />
+            New ticket
+          </Button>
+        </div>
       </div>
 
       {local.length === 0 && !creating ? (
         <EmptyState
           icon={ListTodo}
           title="No tickets yet"
-          description="Create your first ticket to get started."
+          description="Generate a kickoff set with AI, or create the first one by hand."
+          action={
+            <Button size="sm" onClick={() => setGenerateOpen(true)}>
+              <Sparkles className="size-3.5" />
+              Generate tickets
+            </Button>
+          }
         />
       ) : (
-        <Tabs defaultValue="list" className="gap-4">
+        <Tabs defaultValue="list" className="gap-3">
           <TabsList>
             <TabsTrigger value="list">
               <ListTodo className="size-4" /> List
@@ -370,14 +434,24 @@ export function TicketsPanel({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="list">
-            <DataTable>
+          <TabsContent value="list" className={BOARD_SHELL}>
+            <PaginatedDataTable
+              total={total}
+              from={from}
+              to={to}
+              page={page}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              emptyLabel="No tickets"
+            >
               <Table>
-                <TableHeader>
+                <TableHeader className={stickyTableHeaderClass}>
                   <TableRow>
                     <TableHead className="w-28">ID</TableHead>
                     <TableHead>Title</TableHead>
+                    <TableHead>Priority</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="hidden lg:table-cell">Tags</TableHead>
                     <TableHead>Assignee</TableHead>
                     <TableHead>Due</TableHead>
                     <TableHead className="hidden md:table-cell">
@@ -386,7 +460,7 @@ export function TicketsPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {local.map((t) => {
+                  {pageRows.map((t) => {
                     const assigneeLabel =
                       t.assigneeKind === "client"
                         ? "Client"
@@ -404,12 +478,23 @@ export function TicketsPanel({
                           {ticketShortId(t.id)}
                         </TableCell>
                         <TableCell className="max-w-[280px]">
-                          <span className="truncate font-medium">
-                            {t.title}
-                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{t.title}</p>
+                            {t.description?.trim() ? (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {t.description}
+                              </p>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <TicketPriorityPill priority={t.priority} />
                         </TableCell>
                         <TableCell>
                           <TicketStatusBadge status={t.status} />
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <TicketTags tags={t.tags} />
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {assigneeLabel}
@@ -430,17 +515,17 @@ export function TicketsPanel({
                   })}
                 </TableBody>
               </Table>
-            </DataTable>
+            </PaginatedDataTable>
           </TabsContent>
 
-          <TabsContent value="kanban">
+          <TabsContent value="kanban" className={BOARD_SHELL}>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCorners}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
             >
-              <div className="flex gap-3 overflow-x-auto pb-2">
+              <div className="flex h-full min-h-0 gap-3 overflow-x-auto overflow-y-hidden pb-1">
                 {ticketStatuses.map((status) => (
                   <KanbanColumn
                     key={status}
@@ -451,7 +536,7 @@ export function TicketsPanel({
                   />
                 ))}
               </div>
-              <DragOverlay>
+              <DragOverlay dropAnimation={null}>
                 {activeTicket ? (
                   <TicketCard
                     ticket={activeTicket}
@@ -490,6 +575,13 @@ export function TicketsPanel({
           />
         ) : null}
       </TicketSidePanel>
+
+      <GenerateTicketsDialog
+        projectId={projectId}
+        projectName={projectName}
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+      />
     </div>
   );
 }

@@ -33,6 +33,7 @@ import {
   type Activity,
   type Note,
   type Attachment,
+  type Quote,
   type LeadStatus,
   type ActivityType,
   leadStatuses,
@@ -64,6 +65,7 @@ import { GenerateEmailButton } from "@/components/generate-email-button";
 import { QualifyLeadButton } from "@/components/qualify-lead-button";
 import { QualifyScoreDonut } from "@/components/qualify-score-donut";
 import { Markdown } from "@/components/markdown";
+import { StatusPill } from "@/components/status-pill";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -160,11 +162,20 @@ function CopyLeadBriefButton({ lead }: { lead: Lead }) {
   );
 }
 
+const quoteStatusTone: Record<Quote["status"], string> = {
+  draft: "bg-muted text-muted-foreground",
+  sent: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
+  accepted:
+    "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+  declined: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200",
+};
+
 export function LeadDetail({
   lead,
   activities,
   notes: rawNotes,
   files,
+  quotes = [],
   mode = "page",
   onClose,
   onChanged,
@@ -173,6 +184,7 @@ export function LeadDetail({
   activities: Activity[];
   notes: Note[];
   files: Attachment[];
+  quotes?: Quote[];
   mode?: "page" | "drawer";
   onClose?: () => void;
   /** Reload activities/notes/files after a mutation (drawer). */
@@ -247,6 +259,9 @@ export function LeadDetail({
                 <Link href={`/leads/${lead.id}/edit`}>
                   <Pencil className="size-4" /> Edit
                 </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href={`/quotes/new?leadId=${lead.id}`}>New quote</Link>
               </Button>
               <Button asChild>
                 <Link href={`/projects/new?leadId=${lead.id}`}>
@@ -401,6 +416,8 @@ export function LeadDetail({
         ) : null}
       </header>
 
+      <LeadQuotesSection leadId={lead.id} quotes={quotes} />
+
       {/* Main workspace */}
       <Tabs defaultValue="timeline" className="gap-5">
         <TabsList>
@@ -515,6 +532,68 @@ export function LeadDetail({
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">{body}</div>
+  );
+}
+
+function LeadQuotesSection({
+  leadId,
+  quotes,
+}: {
+  leadId: string;
+  quotes: Quote[];
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold tracking-tight">
+          Quotes{" "}
+          <span className="font-normal text-muted-foreground">
+            ({quotes.length})
+          </span>
+        </h2>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/quotes/new?leadId=${leadId}`}>
+            <Plus className="size-3.5" />
+            New quote
+          </Link>
+        </Button>
+      </div>
+      {quotes.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border/80 px-4 py-6 text-center text-sm text-muted-foreground">
+          No quotes yet for this lead.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80">
+          {quotes.map((q) => (
+            <li key={q.id}>
+              <Link
+                href={`/quotes/${q.id}`}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-muted/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {q.number || "Draft quote"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {fmtDate(q.updatedAt.slice(0, 10))}
+                    {q.validUntil ? ` · Valid ${fmtDate(q.validUntil)}` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusPill
+                    label={q.status}
+                    className={cn("capitalize", quoteStatusTone[q.status])}
+                  />
+                  <span className="text-sm font-semibold tabular-nums">
+                    {eur(q.total)}
+                  </span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

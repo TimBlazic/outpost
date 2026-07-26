@@ -31,6 +31,7 @@ import {
   normalizeInvoice,
   normalizeLead,
   normalizeProject,
+  normalizeQuote,
   normalizeTask,
   normalizeTicket,
   type Lead,
@@ -44,6 +45,7 @@ import {
   type FileLink,
   type FirmSettings,
   type Invoice,
+  type Quote,
   type PortalMessage,
   type PortalMessageReaction,
   type PortalUpdate,
@@ -143,6 +145,8 @@ const fileStore = {
   saveFirmSettings: (d: FirmSettings) => save("settings", d),
   getInvoices: () => load<Invoice[]>("invoices", []),
   saveInvoices: (d: Invoice[]) => save("invoices", d),
+  getQuotes: () => load<Quote[]>("quotes", []),
+  saveQuotes: (d: Quote[]) => save("quotes", d),
   getPortalUpdates: () =>
     load<PortalUpdate[]>("portal-updates", seedPortalUpdates),
   savePortalUpdates: (d: PortalUpdate[]) => save("portal-updates", d),
@@ -253,6 +257,25 @@ export async function getInvoices() {
 }
 export async function saveInvoices(d: Invoice[]) {
   return (await backend()).saveInvoices(d.map(normalizeInvoice));
+}
+export async function getQuotes() {
+  const rows = await (await backend()).getQuotes();
+  return rows.map(normalizeQuote);
+}
+export async function saveQuotes(d: Quote[]) {
+  return (await backend()).saveQuotes(d.map(normalizeQuote));
+}
+export async function getQuoteById(id: string) {
+  return (await getQuotes()).find((q) => q.id === id);
+}
+
+export async function getQuotesForLead(leadId: string) {
+  const quotes = await getQuotes();
+  return quotes
+    .filter((q) => q.leadId === leadId)
+    .sort((a, b) =>
+      a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0
+    );
 }
 export async function getPortalUpdates() {
   return (await backend()).getPortalUpdates();

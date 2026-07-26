@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/app-shell";
 import { DashboardRangeSelect } from "@/components/dashboard-range-select";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
-import { InvoicesTable } from "@/components/invoices-table";
+import { InvoicesView } from "@/components/invoices-view";
 import { StatCard } from "@/components/stat-card";
 import {
   dashboardRangeLabels,
@@ -95,7 +95,7 @@ export default async function InvoicesPage({
           actionHref="/invoices/new"
         />
       ) : (
-        <InvoicesTable invoices={sorted} />
+        <InvoicesView invoices={sorted} />
       )}
     </div>
   );

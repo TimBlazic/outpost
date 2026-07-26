@@ -68,7 +68,7 @@ export function PortalWelcome({
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button
             size="sm"
-            className="bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-white"
+            className="bg-[var(--portal-accent)] text-[var(--portal-bg)] hover:bg-[var(--portal-accent)] hover:text-[var(--portal-bg)] hover:opacity-90"
             onClick={() => {
               onGoMessages();
               dismiss();
@@ -79,7 +79,7 @@ export function PortalWelcome({
           <Button
             size="sm"
             variant="ghost"
-            className="text-[var(--portal-muted)] hover:bg-[var(--portal-bg)] hover:text-[var(--portal-fg)]"
+            className="text-[var(--portal-muted)] hover:bg-[var(--portal-surface)] hover:text-[var(--portal-fg)]"
             onClick={dismiss}
           >
             {t.welcomeContinue}

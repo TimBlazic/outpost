@@ -90,6 +90,14 @@ const STATIC_ACTIONS: PaletteItem[] = [
     section: "Create",
   },
   {
+    id: "new-quote",
+    title: "New quote",
+    subtitle: "AI-assisted ponudba",
+    href: "/quotes/new",
+    icon: Plus,
+    section: "Create",
+  },
+  {
     id: "new-invoice",
     title: "New invoice",
     subtitle: "Create an invoice",
@@ -161,6 +169,13 @@ const STATIC_ACTIONS: PaletteItem[] = [
     title: "Messages",
     href: "/messages",
     icon: MessageSquare,
+    section: "Go to",
+  },
+  {
+    id: "go-quotes",
+    title: "Quotes",
+    href: "/quotes",
+    icon: FileText,
     section: "Go to",
   },
   {

@@ -17,6 +17,8 @@ import type {
   Invoice,
   InvoiceClientSnapshot,
   InvoiceLineItem,
+  Quote,
+  QuoteLineItem,
   PortalUpdate,
   PortalMessage,
   PortalMessageReaction,
@@ -37,6 +39,7 @@ import {
   normalizeLead,
   normalizePortalMessage,
   normalizeProject,
+  normalizeQuote,
   normalizeTask,
   normalizeTicket,
 } from "../data";
@@ -124,6 +127,7 @@ function mapPayment(row: Record<string, unknown>): Payment {
     dueOn: (row.due_on as string) ?? null,
     paid: Boolean(row.paid),
     paidOn: (row.paid_on as string) ?? null,
+    invoiceId: (row.invoice_id as string) ?? null,
   };
 }
 
@@ -208,6 +212,7 @@ function mapInvoice(row: Record<string, unknown>): Invoice {
     id: row.id as string,
     clientId: (row.client_id as string) ?? null,
     projectId: (row.project_id as string) ?? null,
+    paymentId: (row.payment_id as string) ?? null,
     clientSnapshot: (row.client_snapshot as InvoiceClientSnapshot) ?? {
       name: "",
       email: "",
@@ -236,6 +241,35 @@ function mapInvoice(row: Record<string, unknown>): Invoice {
   });
 }
 
+function mapQuote(row: Record<string, unknown>): Quote {
+  return normalizeQuote({
+    id: row.id as string,
+    leadId: (row.lead_id as string) ?? null,
+    status: row.status as Quote["status"],
+    locale: row.locale === "en" ? "en" : "sl",
+    number: (row.number as string) ?? null,
+    year: row.year == null ? null : Number(row.year),
+    sequence: row.sequence == null ? null : Number(row.sequence),
+    clientName: (row.client_name as string) ?? "",
+    clientCompany: (row.client_company as string) ?? "",
+    clientEmail: (row.client_email as string) ?? "",
+    intro: (row.intro as string) ?? "",
+    scope: (row.scope as string) ?? "",
+    notes: (row.notes as string) ?? "",
+    discoveryNotes: (row.discovery_notes as string) ?? "",
+    projectDuration: (row.project_duration as string) ?? "",
+    lineItems: (row.line_items as QuoteLineItem[]) ?? [],
+    currency: "EUR",
+    subtotal: Number(row.subtotal ?? 0),
+    total: Number(row.total ?? 0),
+    validUntil: (row.valid_until as string) ?? null,
+    sentAt: (row.sent_at as string) ?? null,
+    createdBy: (row.created_by as string) ?? null,
+    createdAt: (row.created_at as string) ?? new Date().toISOString(),
+    updatedAt: (row.updated_at as string) ?? new Date().toISOString(),
+  });
+}
+
 function mapTicket(row: Record<string, unknown>): Ticket {
   return normalizeTicket({
     id: row.id as string,
@@ -243,6 +277,8 @@ function mapTicket(row: Record<string, unknown>): Ticket {
     title: row.title as string,
     description: (row.description as string) ?? "",
     status: row.status as Ticket["status"],
+    priority: (row.priority as Ticket["priority"]) ?? "Medium",
+    tags: (row.tags as string[]) ?? [],
     createdAt: row.created_at as string,
     dueAt: (row.due_at as string) ?? null,
     assigneeKind: row.assignee_kind as Ticket["assigneeKind"],
@@ -496,6 +532,7 @@ export async function saveProjects(projects: Project[]) {
           due_on: dateOrNull(pay.dueOn),
           paid: pay.paid,
           paid_on: dateOrNull(pay.paidOn),
+          invoice_id: pay.invoiceId,
         }))
       );
       throwIf(payErr);
@@ -900,6 +937,8 @@ export async function getFirmSettings(): Promise<FirmSettings> {
     invoicePrefix: (data.invoice_prefix as string) ?? "",
     invoiceNextSequenceByYear:
       (data.invoice_next_sequence_by_year as Record<string, number>) ?? {},
+    quoteNextSequenceByYear:
+      (data.quote_next_sequence_by_year as Record<string, number>) ?? {},
     defaultCurrency:
       (data.default_currency as FirmSettings["defaultCurrency"]) ?? "EUR",
     defaultPaymentTermsDays: Number(
@@ -937,6 +976,7 @@ export async function saveFirmSettings(settings: FirmSettings) {
     signature_path: s.signaturePath,
     invoice_prefix: s.invoicePrefix,
     invoice_next_sequence_by_year: s.invoiceNextSequenceByYear,
+    quote_next_sequence_by_year: s.quoteNextSequenceByYear,
     default_currency: s.defaultCurrency,
     default_payment_terms_days: s.defaultPaymentTermsDays,
     ai_email_system_prompt: s.aiEmailSystemPrompt,
@@ -1154,6 +1194,59 @@ export async function getInvoices(): Promise<Invoice[]> {
   return (data ?? []).map(mapInvoice);
 }
 
+export async function getQuotes(): Promise<Quote[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  throwIf(error);
+  return (data ?? []).map((r) => mapQuote(r as Record<string, unknown>));
+}
+
+export async function saveQuotes(quotes: Quote[]) {
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("quotes").select("id");
+  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
+  const nextIds = new Set(quotes.map((q) => q.id));
+  const toDelete = [...existingIds].filter((id) => !nextIds.has(id));
+  if (toDelete.length) {
+    const { error } = await supabase.from("quotes").delete().in("id", toDelete);
+    throwIf(error);
+  }
+  if (quotes.length) {
+    const { error } = await supabase.from("quotes").upsert(
+      quotes.map((q) => ({
+        id: q.id,
+        lead_id: q.leadId,
+        status: q.status,
+        locale: q.locale,
+        number: q.number,
+        year: q.year,
+        sequence: q.sequence,
+        client_name: q.clientName,
+        client_company: q.clientCompany,
+        client_email: q.clientEmail,
+        intro: q.intro,
+        scope: q.scope,
+        notes: q.notes,
+        discovery_notes: q.discoveryNotes,
+        project_duration: q.projectDuration,
+        line_items: q.lineItems,
+        currency: q.currency,
+        subtotal: q.subtotal,
+        total: q.total,
+        valid_until: q.validUntil,
+        sent_at: q.sentAt,
+        created_by: q.createdBy,
+        created_at: q.createdAt,
+        updated_at: q.updatedAt,
+      }))
+    );
+    throwIf(error);
+  }
+}
+
 export async function saveInvoices(invoices: Invoice[]) {
   const supabase = await createClient();
   const { data: existing } = await supabase.from("invoices").select("id");
@@ -1173,6 +1266,7 @@ export async function saveInvoices(invoices: Invoice[]) {
         id: i.id,
         client_id: i.clientId,
         project_id: i.projectId,
+        payment_id: i.paymentId,
         client_snapshot: i.clientSnapshot,
         invoice_number: i.invoiceNumber,
         year: i.year,
@@ -1224,6 +1318,8 @@ export async function saveTickets(tickets: Ticket[]) {
         title: t.title,
         description: t.description,
         status: t.status,
+        priority: t.priority,
+        tags: t.tags,
         created_at: t.createdAt,
         due_at: dateOrNull(t.dueAt),
         assignee_kind: t.assigneeKind,

@@ -7,8 +7,10 @@ import {
   ArrowLeft,
   Copy,
   Download,
+  ExternalLink,
   Pencil,
   Trash2,
+  X,
 } from "lucide-react";
 
 import type { FirmSettings, Invoice } from "@/lib/data";
@@ -43,22 +45,37 @@ export function InvoiceDetail({
   invoice,
   settings,
   projectName,
+  mode = "page",
+  onClose,
+  onChanged,
 }: {
   invoice: Invoice;
   settings: FirmSettings;
   projectName?: string | null;
+  mode?: "page" | "drawer";
+  onClose?: () => void;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const drawer = mode === "drawer";
 
-  function run(action: () => Promise<void>, redirectTo?: string) {
+  function afterMutation() {
+    router.refresh();
+    onChanged?.();
+  }
+
+  function run(action: () => Promise<void>, opts?: { close?: boolean }) {
     setError(null);
     startTransition(async () => {
       try {
         await action();
-        if (redirectTo) router.push(redirectTo);
-        router.refresh();
+        if (opts?.close) {
+          onClose?.();
+          if (!drawer) router.push("/invoices");
+        }
+        afterMutation();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Action failed");
       }
@@ -70,27 +87,32 @@ export function InvoiceDetail({
   const canIssue = invoice.status === "draft";
   const canPay = invoice.status === "issued";
   const canVoid = invoice.status !== "void";
-  const canDelete =
-    invoice.status === "draft" || invoice.status === "void";
   const canPdf =
     invoice.status === "issued" ||
     invoice.status === "paid" ||
     invoice.status === "void" ||
     invoice.status === "draft";
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">
-      <Link
-        href="/invoices"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> Invoices
-      </Link>
+  const body = (
+    <>
+      {!drawer ? (
+        <Link
+          href="/invoices"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> Invoices
+        </Link>
+      ) : null}
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="app-display text-3xl italic tracking-tight sm:text-4xl">
+            <h1
+              className={cn(
+                "app-display italic tracking-tight",
+                drawer ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl"
+              )}
+            >
               {title}
             </h1>
             <StatusPill
@@ -170,20 +192,22 @@ export function InvoiceDetail({
               Void
             </Button>
           ) : null}
-          {canDelete ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              onClick={() => {
-                if (!confirm("Delete this invoice permanently?")) return;
-                run(() => deleteInvoice(invoice.id), "/invoices");
-              }}
-            >
-              <Trash2 className="size-3.5" />
-              Delete
-            </Button>
-          ) : null}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => {
+              const msg =
+                invoice.status === "paid" || invoice.status === "issued"
+                  ? "Delete this invoice permanently? Linked installment will be unlinked (and unmarked paid)."
+                  : "Delete this invoice permanently?";
+              if (!confirm(msg)) return;
+              run(() => deleteInvoice(invoice.id), { close: true });
+            }}
+          >
+            <Trash2 className="size-3.5" />
+            Delete
+          </Button>
         </div>
       </header>
 
@@ -194,6 +218,51 @@ export function InvoiceDetail({
       ) : null}
 
       <InvoicePreview invoice={invoice} settings={settings} />
-    </div>
+    </>
+  );
+
+  if (drawer) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/80 bg-background/95 px-5 py-3 backdrop-blur-sm">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{title}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {invoice.clientSnapshot.companyName || "Invoice"}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              title="Open full page"
+              className="size-8"
+            >
+              <Link href={`/invoices/${invoice.id}`}>
+                <ExternalLink className="size-3.5" />
+              </Link>
+            </Button>
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                title="Close"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-5 py-5">
+          {body}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-8 p-4 lg:p-6">{body}</div>
   );
 }

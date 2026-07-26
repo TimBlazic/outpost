@@ -14,6 +14,7 @@ import {
 import {
   memberById,
   members as seedMembers,
+  ticketPriorities,
   ticketStatuses,
   type Attachment,
   type Member,
@@ -21,6 +22,7 @@ import {
   type TicketComment,
   type TicketCommentReaction,
   type TicketParty,
+  type TicketPriority,
   type TicketStatus,
 } from "@/lib/data";
 import {
@@ -41,7 +43,9 @@ import {
   ticketShortId,
   ticketStatusMeta,
 } from "@/components/ticket-status-badge";
+import { priorityClass } from "@/components/ticket-priority";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
@@ -97,17 +101,31 @@ export function TicketDetail({
   const [description, setDescription] = useState(ticket?.description ?? "");
   const [descriptionDirty, setDescriptionDirty] = useState(false);
   const [status, setStatus] = useState<TicketStatus>(ticket?.status ?? "Todo");
+  const [priority, setPriority] = useState<TicketPriority>(
+    ticket?.priority ?? "Medium"
+  );
+  const [tagsText, setTagsText] = useState((ticket?.tags ?? []).join(", "));
   const [dueAt, setDueAt] = useState(ticket?.dueAt ?? "");
   const [assigneeKind, setAssigneeKind] = useState<TicketParty>(
     ticket?.assigneeKind ?? "studio"
   );
   const [assigneeId, setAssigneeId] = useState(ticket?.assigneeId ?? "");
 
+  function parseTags(raw: string) {
+    return raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
   useEffect(() => {
     if (!ticket) return;
     setTitle(ticket.title);
     setDescription(ticket.description ?? "");
     setStatus(ticket.status);
+    setPriority(ticket.priority ?? "Medium");
+    setTagsText((ticket.tags ?? []).join(", "));
     setDueAt(ticket.dueAt ?? "");
     setAssigneeKind(ticket.assigneeKind);
     setAssigneeId(ticket.assigneeId ?? "");
@@ -132,6 +150,8 @@ export function TicketDetail({
     title?: string;
     description?: string;
     status?: TicketStatus;
+    priority?: TicketPriority;
+    tags?: string[];
     dueAt?: string | null;
     assigneeKind?: TicketParty;
     assigneeId?: string | null;
@@ -142,6 +162,8 @@ export function TicketDetail({
       title: (patch?.title ?? title).trim(),
       description: patch?.description ?? description,
       status: patch?.status ?? status,
+      priority: patch?.priority ?? priority,
+      tags: patch?.tags ?? parseTags(tagsText),
       dueAt: (patch?.dueAt !== undefined ? patch.dueAt : dueAt) || null,
       assigneeKind: patch?.assigneeKind ?? assigneeKind,
       assigneeId:
@@ -165,6 +187,8 @@ export function TicketDetail({
         title: title.trim(),
         description,
         status,
+        priority,
+        tags: parseTags(tagsText),
         dueAt: dueAt || null,
         assigneeKind,
         assigneeId: assigneeKind === "studio" ? assigneeId || null : null,
@@ -309,6 +333,30 @@ export function TicketDetail({
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
+                      className={cn(PILL, priorityClass[priority])}
+                    >
+                      {priority}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {ticketPriorities.map((p) => (
+                      <DropdownMenuItem
+                        key={p}
+                        onClick={() => {
+                          setPriority(p);
+                          if (!creating) persist({ priority: p });
+                        }}
+                      >
+                        {p}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
                       className={cn(PILL, "text-muted-foreground")}
                     >
                       {assigneeKind === "studio" && assigneeId ? (
@@ -370,6 +418,16 @@ export function TicketDetail({
                   />
                 </label>
               </div>
+
+              <Input
+                value={tagsText}
+                onChange={(e) => setTagsText(e.target.value)}
+                onBlur={() => {
+                  if (!creating) persist({ tags: parseTags(tagsText) });
+                }}
+                placeholder="Tags (comma separated)"
+                className="h-8 border-border/60 bg-transparent text-xs"
+              />
             </div>
 
             <div className="px-5 pb-5">
