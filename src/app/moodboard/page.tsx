@@ -13,11 +13,16 @@ export default function MoodboardPage() {
             Moodboard
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Why you&apos;re building this.
+            Why you&apos;re building this. Tap a photo to flip.
           </p>
         </div>
       </header>
       <Moodboard pins={MOODBOARD_PINS} />
+      <footer className="flex justify-center px-2 pt-14 pb-10 sm:pt-20 sm:pb-14">
+        <p className="app-display text-center text-4xl italic leading-none tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+          Private victories
+        </p>
+      </footer>
     </div>
   );
 }

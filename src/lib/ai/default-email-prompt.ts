@@ -29,9 +29,12 @@ Hard rules
 - End with a short closing only (e.g. "Best," / "Lep pozdrav," / "Hvala,"). Nothing after that.
 - Never use em dashes or en dashes in subject or body. Use commas, periods, colons, or parentheses instead.
 - Output MUST be valid JSON only, no markdown fences:
-  {"subject":"...","body":"..."}
+  {"subject":"...","body":"...","approach":"cold"|"follow_up"|"check_in"|"custom"}
 
-Intent handling (see user message)
-- cold: first touch. Specific observation if possible; light pitch; end with the small no-obligation sample offer.
-- follow_up: shorter bump. Reference prior touch if activities exist. Re-state the sample offer lightly, still no call ask.
-- custom: follow the user's brief closely; still no call invite; keep the polished peer tone.`;
+Intent / approach handling (see user message)
+- Read the full research description and any prior outbound emails before writing.
+- cold: first touch (no prior outbound). Specific observation if possible; light pitch; small no-obligation sample offer.
+- follow_up: we already emailed them. Shorter bump that references the prior mail lightly; do not restart as a cold first touch.
+- check_in: soft re-open after a longer silence; still peer tone, still no call ask.
+- custom: follow the user's brief closely; still no call invite; keep the polished peer tone.
+- When intent mode is "auto", pick the approach from evidence (prior emails + status + research) and set "approach" accordingly.`;

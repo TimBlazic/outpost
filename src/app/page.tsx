@@ -141,17 +141,32 @@ export default async function DashboardPage({
     : 0;
 
   const overdueFollowUps = leads
-    .filter((l) => l.nextFollowUp && dueState(l.nextFollowUp) === "overdue")
+    .filter(
+      (l) =>
+        l.nextFollowUp &&
+        dueState(l.nextFollowUp) === "overdue" &&
+        !["Won", "Lost", "Not suitable"].includes(l.status)
+    )
     .sort((a, b) => (a.nextFollowUp! < b.nextFollowUp! ? -1 : 1));
 
   const dueSoon = leads
     .filter((l) => {
       if (!l.nextFollowUp) return false;
+      if (["Won", "Lost", "Not suitable"].includes(l.status)) return false;
       const state = dueState(l.nextFollowUp);
       return state === "today" || state === "soon";
     })
     .sort((a, b) => (a.nextFollowUp! < b.nextFollowUp! ? -1 : 1))
-    .slice(0, 6);
+    .slice(0, 8);
+
+  const upcomingFollowUps = leads
+    .filter((l) => {
+      if (!l.nextFollowUp) return false;
+      if (["Won", "Lost", "Not suitable"].includes(l.status)) return false;
+      return dueState(l.nextFollowUp) === "later";
+    })
+    .sort((a, b) => (a.nextFollowUp! < b.nextFollowUp! ? -1 : 1))
+    .slice(0, 4);
 
   const hotLeads = [...leads]
     .filter((l) => !["Won", "Lost", "Not suitable"].includes(l.status))
@@ -329,7 +344,7 @@ export default async function DashboardPage({
                 Needs a follow-up
               </CardTitle>
               <CardDescription>
-                Overdue first, then what&apos;s due in the next 7 days
+                Overdue first, then the next 7 days — then anything further out
               </CardDescription>
             </div>
             <Link
@@ -340,22 +355,37 @@ export default async function DashboardPage({
             </Link>
           </CardHeader>
           <CardContent className="p-0">
-            {overdueFollowUps.length === 0 && dueSoon.length === 0 ? (
-              <p className="px-6 py-10 text-center text-sm text-muted-foreground">
-                Inbox zero — nothing waiting on you.
-              </p>
+            {overdueFollowUps.length === 0 &&
+            dueSoon.length === 0 &&
+            upcomingFollowUps.length === 0 ? (
+              <div className="flex flex-col items-center px-6 py-12 text-center">
+                <span className="mb-3 flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                  <CalendarClock className="size-5" />
+                </span>
+                <p className="text-sm font-medium">No follow-ups queued</p>
+                <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                  When you send outreach, a follow-up date is set automatically —
+                  or add one on a lead.
+                </p>
+                <Link
+                  href="/leads"
+                  className="mt-4 text-sm font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  Browse leads
+                </Link>
+              </div>
             ) : (
               <ul className="divide-y">
                 {overdueFollowUps.map((l) => {
                   const days = Math.abs(daysUntil(l.nextFollowUp!));
                   return (
                     <li key={l.id}>
-                      <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-rose-50/60 sm:gap-4 sm:px-6 sm:py-3.5">
+                      <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-rose-50/60 dark:hover:bg-rose-950/20 sm:gap-4 sm:px-6 sm:py-3.5">
                         <Link
                           href={`/leads/${l.id}`}
                           className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4"
                         >
-                          <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-rose-100 text-rose-700">
+                          <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
                             <span className="text-sm font-semibold leading-none">
                               {days}
                             </span>
@@ -368,7 +398,7 @@ export default async function DashboardPage({
                               {l.company}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {l.contact}
+                              Overdue · {l.contact || "—"}
                             </p>
                           </div>
                           <StatusPill
@@ -388,7 +418,7 @@ export default async function DashboardPage({
                   const days = daysUntil(l.nextFollowUp!);
                   const isToday = days === 0;
                   return (
-                    <li key={l.id}>
+                    <li key={`soon-${l.id}`}>
                       <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:gap-4 sm:px-6 sm:py-3.5">
                         <Link
                           href={`/leads/${l.id}`}
@@ -398,19 +428,59 @@ export default async function DashboardPage({
                             className={cn(
                               "flex size-10 shrink-0 flex-col items-center justify-center rounded-lg",
                               isToday
-                                ? "bg-amber-100 text-amber-800"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                                 : "bg-muted text-muted-foreground"
                             )}
                           >
-                            <CalendarClock className="size-4" />
+                            {isToday ? (
+                              <CalendarClock className="size-4" />
+                            ) : (
+                              <>
+                                <span className="text-sm font-semibold leading-none">
+                                  {days}
+                                </span>
+                                <span className="text-[10px] leading-tight">
+                                  {days === 1 ? "day" : "days"}
+                                </span>
+                              </>
+                            )}
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium">
                               {l.company}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {isToday ? "today" : fmtDate(l.nextFollowUp)} ·{" "}
-                              {l.contact}
+                              {isToday ? "Today" : fmtDate(l.nextFollowUp)} ·{" "}
+                              {l.contact || "—"}
+                            </p>
+                          </div>
+                        </Link>
+                        <FollowUpRowActions leadId={l.id} />
+                      </div>
+                    </li>
+                  );
+                })}
+                {upcomingFollowUps.map((l) => {
+                  const days = daysUntil(l.nextFollowUp!);
+                  return (
+                    <li key={`later-${l.id}`}>
+                      <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 sm:gap-4 sm:px-6 sm:py-3.5">
+                        <Link
+                          href={`/leads/${l.id}`}
+                          className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4"
+                        >
+                          <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-muted/80 text-muted-foreground">
+                            <span className="text-sm font-semibold leading-none">
+                              {days}
+                            </span>
+                            <span className="text-[10px] leading-tight">d</span>
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {l.company}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {fmtDate(l.nextFollowUp)} · {l.contact || "—"}
                             </p>
                           </div>
                         </Link>

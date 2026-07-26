@@ -18,7 +18,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export type SettingsSection = "studio" | "billing" | "ai";
+export type SettingsSection = "studio" | "billing" | "ai" | "email";
 
 export function SettingsForm({
   settings,
@@ -61,6 +61,12 @@ export function SettingsForm({
   const [aiEmailSystemPrompt, setAiEmailSystemPrompt] = useState(
     settings.aiEmailSystemPrompt || DEFAULT_AI_EMAIL_SYSTEM_PROMPT
   );
+  const [outboundFromName, setOutboundFromName] = useState(
+    settings.outboundFromName
+  );
+  const [outboundFromEmail, setOutboundFromEmail] = useState(
+    settings.outboundFromEmail
+  );
   const [saved, setSaved] = useState(false);
   const [sigError, setSigError] = useState<string | null>(null);
 
@@ -93,6 +99,11 @@ export function SettingsForm({
         aiEmailSystemPrompt.trim() === DEFAULT_AI_EMAIL_SYSTEM_PROMPT.trim()
           ? ""
           : aiEmailSystemPrompt;
+    }
+    if (section === "email") {
+      next.outboundFromName = outboundFromName.trim() || "Tim";
+      next.outboundFromEmail =
+        outboundFromEmail.trim() || "tim@timblazic.dev";
     }
     return next;
   }
@@ -460,6 +471,55 @@ export function SettingsForm({
                 }
               >
                 Reset to default
+              </Button>
+              {saved && (
+                <span className="text-sm text-emerald-600">Saved</span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {section === "email" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Outbound email (Resend)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-sm text-muted-foreground">
+              From address for Send in Qualify / Generate email. Domain must be
+              verified in Resend. API key:{" "}
+              <code className="text-xs">RESEND_API_KEY</code> in{" "}
+              <code className="text-xs">.env.local</code>. Nothing sends without
+              your click. Each send BCC&apos;s this From address so you get a
+              copy in your inbox (Resend doesn&apos;t write to Gmail Sent).
+            </p>
+            <div>
+              <Label htmlFor="outboundFromName" className="mb-1.5">
+                From name
+              </Label>
+              <Input
+                id="outboundFromName"
+                value={outboundFromName}
+                onChange={(e) => setOutboundFromName(e.target.value)}
+                placeholder="Tim"
+              />
+            </div>
+            <div>
+              <Label htmlFor="outboundFromEmail" className="mb-1.5">
+                From email
+              </Label>
+              <Input
+                id="outboundFromEmail"
+                type="email"
+                value={outboundFromEmail}
+                onChange={(e) => setOutboundFromEmail(e.target.value)}
+                placeholder="tim@timblazic.dev"
+              />
+            </div>
+            <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving…" : "Save email settings"}
               </Button>
               {saved && (
                 <span className="text-sm text-emerald-600">Saved</span>

@@ -33,12 +33,16 @@ export function fmtDateLong(d: string | null) {
   }).format(new Date(d));
 }
 
-const TODAY = new Date("2026-06-16");
-
 export function dueState(d: string): "overdue" | "today" | "soon" | "later" {
-  const date = new Date(d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // Parse as local calendar day (YYYY-MM-DD) to avoid UTC off-by-one.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(d)
+    ? new Date(`${d}T00:00:00`)
+    : new Date(d);
+  date.setHours(0, 0, 0, 0);
   const diff = Math.round(
-    (date.getTime() - TODAY.getTime()) / (1000 * 60 * 60 * 24)
+    (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
   );
   if (diff < 0) return "overdue";
   if (diff === 0) return "today";

@@ -5,19 +5,29 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import {
   AlertTriangle,
+  ChevronDown,
   ExternalLink,
   Loader2,
+  Mail,
   Pencil,
   Sparkles,
 } from "lucide-react";
 
 import { QualifyScoreDonut } from "@/components/qualify-score-donut";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { mailtoHref } from "@/lib/ai/email";
 import { leadCategories, leadStatuses, type LeadStatus } from "@/lib/data";
+import { sendStudioEmailAction } from "@/lib/email/actions";
 import {
   requalifyWithCompanywallAction,
   reviseQualifyDraftAction,
@@ -37,10 +47,6 @@ const STEPS = [
   "Verdict",
   "Draft",
 ] as const;
-
-function mailtoHref(subject: string, body: string) {
-  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
 
 function Field({
   label,
@@ -228,7 +234,7 @@ export function LeadQualifyWizard({
     });
   }
 
-  function save(openMail: boolean) {
+  function save(mode: "save" | "send" | "mailto" = "save") {
     setError(null);
     startTransition(async () => {
       try {
@@ -249,9 +255,22 @@ export function LeadQualifyWizard({
           draftBody,
           saveDraftNote: true,
         });
+
+        if (mode === "send") {
+          if (!email.trim()) {
+            throw new Error("Add a recipient email before Send");
+          }
+          await sendStudioEmailAction({
+            to: email,
+            subject: draftSubject,
+            body: draftBody,
+            leadId,
+          });
+        }
+
         onClose?.();
-        if (openMail) {
-          window.location.href = mailtoHref(draftSubject, draftBody);
+        if (mode === "mailto") {
+          window.location.href = mailtoHref(email, draftSubject, draftBody);
         }
         router.push(`/leads/${leadId}`);
         router.refresh();
@@ -777,17 +796,43 @@ export function LeadQualifyWizard({
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2 border-t border-border/70 bg-background/90 px-5 py-3 backdrop-blur sm:px-8">
-          <Button type="button" disabled={pending} onClick={() => save(false)}>
+          <Button type="button" disabled={pending} onClick={() => save("save")}>
             Save lead
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending}
-            onClick={() => save(true)}
-          >
-            Save + open mail
-          </Button>
+          <div className="flex">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-r-none"
+              disabled={pending || !email.trim() || !draftBody.trim()}
+              onClick={() => save("send")}
+            >
+              {pending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Mail className="size-4" />
+              )}
+              Save &amp; Send
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-l-none border-l-0 px-2"
+                  disabled={pending}
+                  aria-label="More mail options"
+                >
+                  <ChevronDown className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => save("mailto")}>
+                  Save + open in mail app
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <Button
             type="button"
             variant="ghost"

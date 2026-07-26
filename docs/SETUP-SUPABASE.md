@@ -93,6 +93,16 @@ ANTHROPIC_API_KEY=sk-ant-...
 PAGESPEED_API_KEY=   # Google PageSpeed Insights API key; if unset, Lighthouse step is skipped
 ```
 
+### Resend outbound email (optional)
+
+Studio **Send** (Qualify / Generate email) uses Resend. Nothing sends without a click.
+
+```env
+RESEND_API_KEY=re_...
+```
+
+Also run migration `20260726110000_outbound_email_from.sql`, then set From name/email under **Settings → Email** (default `Tim <tim@timblazic.dev>`). Verify `timblazic.dev` (or your domain) in the Resend dashboard.
+
 ## 5. Force file store (optional)
 
 ```env

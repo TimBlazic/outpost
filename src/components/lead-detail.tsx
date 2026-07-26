@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   ArrowLeft,
   Globe,
@@ -46,6 +46,10 @@ import {
   deleteNote,
   addActivity,
 } from "@/lib/actions";
+import {
+  activityDetailPreview,
+  parseActivityDetail,
+} from "@/lib/activity-detail";
 import { eur, fmtDate, fmtDateLong, leadStatusColor, dueState } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -520,6 +524,132 @@ function Fact({
 
 // ---- Activity --------------------------------------------------------------
 
+function ActivityDetailDrawer({
+  activity,
+  onClose,
+}: {
+  activity: Activity | null;
+  onClose: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const open = Boolean(activity);
+
+  useEffect(() => {
+    if (!open) {
+      setVisible(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!activity) return null;
+
+  const Icon = activityIcon[activity.type];
+  const parsed = parseActivityDetail(activity.detail);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div
+        className={cn(
+          "absolute inset-0 bg-black/30 backdrop-blur-[2px] transition-opacity duration-200",
+          visible ? "opacity-100" : "opacity-0"
+        )}
+        onClick={onClose}
+      />
+      <div
+        className={cn(
+          "relative z-10 m-3 flex h-[calc(100vh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl transition-transform duration-300 ease-out",
+          visible ? "translate-x-0" : "translate-x-full"
+        )}
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-border/70 px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex size-7 items-center justify-center rounded-full border bg-muted/40 text-muted-foreground">
+                <Icon className="size-3.5" />
+              </span>
+              <p className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+                {activity.type}
+              </p>
+            </div>
+            <h2 className="mt-2 text-base font-semibold leading-snug">
+              {activity.title}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {fmtDateLong(activity.date)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            title="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 pb-10">
+          {parsed?.kind === "email" ? (
+            <>
+              <div className="grid gap-3 text-sm">
+                <div>
+                  <p className="text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+                    To
+                  </p>
+                  <p className="mt-0.5 font-medium">{parsed.to || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+                    Subject
+                  </p>
+                  <p className="mt-0.5 font-medium">
+                    {parsed.subject || "—"}
+                  </p>
+                </div>
+                {parsed.followUpOn ? (
+                  <div>
+                    <p className="text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+                      Follow-up set
+                    </p>
+                    <p className="mt-0.5 font-medium">
+                      {fmtDate(parsed.followUpOn)}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <p className="mb-2 text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+                  Body
+                </p>
+                <pre className="whitespace-pre-wrap rounded-xl border border-border/60 bg-muted/20 p-4 font-sans text-sm leading-relaxed text-foreground">
+                  {parsed.body || "—"}
+                </pre>
+              </div>
+            </>
+          ) : parsed?.kind === "text" ? (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+              {parsed.text}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">No extra details.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActivityPanel({
   leadId,
   activities,
@@ -534,6 +664,7 @@ function ActivityPanel({
   const [type, setType] = useState<ActivityType>("email");
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
+  const [selected, setSelected] = useState<Activity | null>(null);
 
   function submit() {
     if (!title.trim()) return;
@@ -547,10 +678,10 @@ function ActivityPanel({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-10">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Everything that happened with this lead
+          Everything that happened with this lead. Click an item for details.
         </p>
         <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}>
           <Plus className="size-4" /> Log activity
@@ -595,34 +726,48 @@ function ActivityPanel({
         </div>
       )}
 
-      <ol className="relative space-y-0 border-l border-border/80 pl-6">
+      <ol className="relative space-y-0 border-l border-border/80 pb-8 pl-6">
         {activities.map((a) => {
           const Icon = activityIcon[a.type];
+          const preview = activityDetailPreview(a.detail);
           return (
-            <li key={a.id} className="relative pb-6 last:pb-0">
-              <span className="absolute -left-[31px] flex size-6 items-center justify-center rounded-full border bg-background text-muted-foreground">
-                <Icon className="size-3.5" />
-              </span>
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm font-medium">{a.title}</p>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {fmtDateLong(a.date)}
+            <li key={a.id} className="relative pb-6 last:pb-2">
+              <button
+                type="button"
+                onClick={() => setSelected(a)}
+                className="group -ml-1 w-full rounded-lg px-1 py-1 text-left transition-colors hover:bg-muted/40"
+              >
+                <span className="absolute -left-[31px] flex size-6 items-center justify-center rounded-full border bg-background text-muted-foreground group-hover:border-foreground/30">
+                  <Icon className="size-3.5" />
                 </span>
-              </div>
-              {a.detail && (
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {a.detail}
-                </p>
-              )}
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-medium group-hover:underline">
+                    {a.title}
+                  </p>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {fmtDateLong(a.date)}
+                  </span>
+                </div>
+                {preview ? (
+                  <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
+                    {preview}
+                  </p>
+                ) : null}
+              </button>
             </li>
           );
         })}
         {activities.length === 0 && (
-          <li className="text-sm text-muted-foreground">
+          <li className="pb-4 text-sm text-muted-foreground">
             No activity logged yet. Log emails, calls, and meetings as you go.
           </li>
         )}
       </ol>
+
+      <ActivityDetailDrawer
+        activity={selected}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }

@@ -17,7 +17,7 @@ export default async function SettingsPage() {
     <div className="flex h-full min-h-0 flex-col gap-6 p-4 lg:p-6">
       <PageHeader
         title="Settings"
-        description="Profile, studio goals, billing, and AI."
+        description="Profile, studio, billing, email, and AI."
       />
       <Tabs
         defaultValue="profile"
@@ -27,6 +27,7 @@ export default async function SettingsPage() {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="studio">Studio</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
+          <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
         </TabsList>
         <TabsContent
@@ -46,6 +47,12 @@ export default async function SettingsPage() {
           className="mt-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
         >
           <SettingsForm settings={settings} section="billing" />
+        </TabsContent>
+        <TabsContent
+          value="email"
+          className="mt-0 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+        >
+          <SettingsForm settings={settings} section="email" />
         </TabsContent>
         <TabsContent
           value="ai"
