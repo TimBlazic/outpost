@@ -11,6 +11,7 @@ import {
   saveActivities,
   saveLeads,
 } from "@/lib/store";
+import { appendStudioEmailSignature } from "./signature";
 
 /** Default days until next follow-up after a studio send. */
 const FOLLOW_UP_DAYS = 3;
@@ -76,6 +77,8 @@ export async function sendStudioEmail(
   const bcc =
     fromEmail.toLowerCase() !== to.toLowerCase() ? [fromEmail] : undefined;
 
+  const signed = appendStudioEmailSignature(body);
+
   const resend = getResend();
   const { data, error } = await resend.emails.send({
     from,
@@ -83,7 +86,8 @@ export async function sendStudioEmail(
     ...(bcc ? { bcc } : {}),
     replyTo: fromEmail,
     subject,
-    text: body,
+    text: signed.text,
+    html: signed.html,
   });
 
   if (error) {
@@ -129,7 +133,7 @@ export async function sendStudioEmail(
       detail: encodeEmailActivityDetail({
         to,
         subject,
-        body,
+        body: signed.text,
         followUpOn,
       }),
       date: now,
