@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Download, ExternalLink, Pencil, X } from "lucide-react";
 import { ArrowLeft } from "lucide-react";
 
 import type { FirmSettings, Quote } from "@/lib/data";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { QuotePreview } from "@/components/quote-preview";
 import { QuoteStatusActions } from "@/components/quote-status-actions";
 import { SendQuoteButton } from "@/components/send-quote-button";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { eur, fmtDateLong } from "@/lib/format";
+import { deleteQuote } from "@/lib/quotes/actions";
 import { cn } from "@/lib/utils";
 
 const statusColor: Record<Quote["status"], string> = {
@@ -40,10 +43,23 @@ export function QuoteDetail({
   onClose?: () => void;
   onChanged?: () => void;
 }) {
+  const router = useRouter();
   const title = quote.number || "Draft quote";
   const canEdit = quote.status === "draft";
   const defaultTo = (leadEmail || quote.clientEmail || "").trim();
   const drawer = mode === "drawer";
+
+  async function onDelete() {
+    await deleteQuote(quote.id);
+    onChanged?.();
+    if (drawer) {
+      onClose?.();
+      router.refresh();
+      return;
+    }
+    router.push("/quotes");
+    router.refresh();
+  }
 
   const body = (
     <>
@@ -113,6 +129,26 @@ export function QuoteDetail({
             onSent={onChanged}
           />
           <QuoteStatusActions quote={quote} onChanged={onChanged} />
+          <ConfirmDelete
+            title="Delete quote?"
+            description={
+              quote.status === "draft"
+                ? "This permanently removes the draft quote."
+                : `This permanently removes the ${quote.status} quote${quote.number ? ` ${quote.number}` : ""}. This cannot be undone.`
+            }
+            confirmLabel="Delete"
+            onConfirm={onDelete}
+            trigger={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                Delete
+              </Button>
+            }
+          />
         </div>
       </header>
 

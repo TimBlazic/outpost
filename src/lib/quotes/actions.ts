@@ -184,9 +184,6 @@ export async function deleteQuote(id: string) {
   const quotes = await getQuotes();
   const existing = quotes.find((q) => q.id === id);
   if (!existing) throw new Error("Quote not found");
-  if (existing.status !== "draft" && existing.status !== "declined") {
-    throw new Error("Only draft or declined quotes can be deleted");
-  }
   await saveQuotes(quotes.filter((q) => q.id !== id));
   revalidateQuotes(undefined, existing.leadId);
 }

@@ -109,8 +109,10 @@ export function isDateInRange(
 export function leadActivityDate(lead: {
   firstContact: string | null;
   lastContact: string | null;
+  createdAt?: string | null;
 }): string | null {
-  return lead.firstContact ?? lead.lastContact;
+  // Prefer contact dates; fall back to createdAt so brand-new leads still count.
+  return lead.firstContact ?? lead.lastContact ?? lead.createdAt ?? null;
 }
 
 const SHORT_MONTHS = [

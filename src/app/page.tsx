@@ -6,7 +6,7 @@ import {
   TrendingUp,
   Users,
   Send,
-  Trophy,
+  Sparkles,
   Target,
   AlertCircle,
   CalendarClock,
@@ -121,6 +121,12 @@ export default async function DashboardPage({
   ).length;
   const won = periodLeads.filter((l) => l.status === "Won").length;
   const lost = periodLeads.filter((l) => l.status === "Lost").length;
+  const qualifiedGoLeads = periodLeads.filter((l) => l.qualifyRating === "go");
+  const qualifiedGo = qualifiedGoLeads.length;
+  const pricedGo = qualifiedGoLeads.filter((l) => l.value > 0);
+  const avgDeal = pricedGo.length
+    ? Math.round(pricedGo.reduce((s, l) => s + l.value, 0) / pricedGo.length)
+    : 0;
   // Open pipeline stays current (not range-sliced) so the board stays useful
   const pipelineValue = leads
     .filter((l) => !["Won", "Lost", "Not suitable"].includes(l.status))
@@ -215,10 +221,10 @@ export default async function DashboardPage({
           icon={Send}
         />
         <StatCard
-          label="Won"
-          value={String(won)}
-          sub={`${lost} lost`}
-          icon={Trophy}
+          label="Qualified go"
+          value={String(qualifiedGo)}
+          sub={avgDeal > 0 ? `avg deal ${eur(avgDeal)}` : "avg deal —"}
+          icon={Sparkles}
         />
         <StatCard
           label="Pipeline value"
@@ -228,7 +234,7 @@ export default async function DashboardPage({
         <StatCard
           label="Conversion"
           value={`${conversionRate}%`}
-          sub="won / closed"
+          sub={`${won} won · ${lost} lost`}
           icon={Target}
         />
       </div>
@@ -589,6 +595,12 @@ export default async function DashboardPage({
           </Card>
         </div>
       </div>
+
+      <footer className="flex justify-center px-2 pt-14 pb-6 sm:pt-20 sm:pb-10">
+        <p className="app-display text-center text-4xl italic leading-none tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+          Unseen reps
+        </p>
+      </footer>
     </div>
   );
 }
