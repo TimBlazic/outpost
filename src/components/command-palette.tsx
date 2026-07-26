@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Binoculars,
   BookOpen,
   Building2,
   CheckSquare,
@@ -124,6 +125,14 @@ const STATIC_ACTIONS: PaletteItem[] = [
     title: "Leads",
     href: "/leads",
     icon: Users,
+    section: "Go to",
+  },
+  {
+    id: "go-hunt",
+    title: "Hunt",
+    subtitle: "Find firms · five a day",
+    href: "/hunt",
+    icon: Binoculars,
     section: "Go to",
   },
   {

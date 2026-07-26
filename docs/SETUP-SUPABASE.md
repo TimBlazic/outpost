@@ -103,6 +103,18 @@ RESEND_API_KEY=re_...
 
 Also run migration `20260726110000_outbound_email_from.sql`, then set From name/email under **Settings → Email** (default `Tim <tim@timblazic.dev>`). Verify `timblazic.dev` (or your domain) in the Resend dashboard.
 
+### Google Places (Lead Hunt)
+
+```env
+GOOGLE_PLACES_API_KEY=...
+```
+
+Enable **Places API (New)** on the Google Cloud project. Server-only. Required for `/hunt` search.
+
+Also run migrations:
+- `20260726120000_prospects.sql` (Hunt pool)
+- `20260726130000_lead_qualify_score.sql` (fit score on leads)
+
 ## 5. Force file store (optional)
 
 ```env

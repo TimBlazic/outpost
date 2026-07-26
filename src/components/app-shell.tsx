@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Users,
   Building2,
+  Binoculars,
   CheckSquare,
   FolderKanban,
   MessageSquare,
@@ -39,6 +40,7 @@ const SIDEBAR_KEY = "outpost.sidebarCollapsed";
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
+  { href: "/hunt", label: "Hunt", icon: Binoculars },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/projects", label: "Projects", icon: FolderKanban },

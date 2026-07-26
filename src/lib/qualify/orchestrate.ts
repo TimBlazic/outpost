@@ -12,10 +12,13 @@ import { runQualifyDraft, runQualifyVerdict } from "./verdict";
 export async function qualifyLead(input: {
   websiteUrl: string;
   companywallUrl?: string | null;
+  /** Prior name from Hunt / CRM — used before Companywall search. */
+  knownCompanyName?: string | null;
 }): Promise<QualifyResult> {
   await requireStudioSession();
   const website = normalizeWebsiteUrl(input.websiteUrl);
   const host = websiteHost(website);
+  const known = input.knownCompanyName?.trim() || null;
 
   const [site, lighthouse, leads, settings, profile] = await Promise.all([
     fetchSite(website),
@@ -25,11 +28,21 @@ export async function qualifyLead(input: {
     getCurrentProfile(),
   ]);
 
-  // Resolve real company name from page copy before Companywall search.
-  const identity = await extractCompanyIdentity({ website, site });
+  // Resolve real company name from page (+ known prior) before Companywall.
+  const identity = await extractCompanyIdentity({
+    website,
+    site,
+    knownCompanyName: known,
+  });
+
+  // Prefer high-confidence identity; fall back to known Maps/CRM name for search.
+  const cwQuery =
+    identity.confidence >= 55
+      ? identity.companyName
+      : known || identity.companyName;
 
   const companywall = await lookupCompanywall({
-    companyName: identity.companyName,
+    companyName: cwQuery,
     domain: host,
     companywallUrl: input.companywallUrl,
   });

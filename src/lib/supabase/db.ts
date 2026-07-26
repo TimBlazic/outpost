@@ -79,6 +79,14 @@ function mapLead(row: Record<string, unknown>): Lead {
     notes: Number(row.notes_count ?? 0),
     createdBy: row.created_by as string,
     description: (row.description as string) ?? "",
+    qualifyScore:
+      row.qualify_score == null || row.qualify_score === ""
+        ? null
+        : Number(row.qualify_score),
+    qualifyRating: (() => {
+      const r = row.qualify_rating as string | null | undefined;
+      return r === "go" || r === "maybe" || r === "no-go" ? r : null;
+    })(),
   });
 }
 
@@ -103,6 +111,8 @@ function leadRow(l: Lead) {
     tags: l.tags,
     created_by: l.createdBy,
     description: l.description ?? "",
+    qualify_score: l.qualifyScore,
+    qualify_rating: l.qualifyRating,
   };
 }
 

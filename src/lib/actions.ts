@@ -114,6 +114,8 @@ export type LeadInput = {
   nextFollowUp: string | null;
   tags: string[];
   description?: string;
+  qualifyScore?: number | null;
+  qualifyRating?: Lead["qualifyRating"];
 };
 
 export async function createLead(input: LeadInput) {
@@ -126,6 +128,8 @@ export async function createLead(input: LeadInput) {
     lastContact: null,
     notes: 0,
     createdBy: input.ownerId,
+    qualifyScore: input.qualifyScore ?? null,
+    qualifyRating: input.qualifyRating ?? null,
   };
   await saveLeads([lead, ...leads]);
   revalidateLead(lead.id);

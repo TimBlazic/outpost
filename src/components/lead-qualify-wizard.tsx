@@ -254,6 +254,8 @@ export function LeadQualifyWizard({
           draftSubject,
           draftBody,
           saveDraftNote: true,
+          qualifyScore: result ? computeFitScore(result) : null,
+          qualifyRating: result?.verdict.rating ?? null,
         });
 
         if (mode === "send") {

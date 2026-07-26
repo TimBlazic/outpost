@@ -6,12 +6,17 @@ import { fitScoreLabel } from "@/lib/qualify/score";
 export function QualifyScoreDonut({
   score,
   className,
+  size = 112,
+  compact = false,
 }: {
   score: number;
   className?: string;
+  /** Outer diameter in px (default 112, use ~64 on lead detail). */
+  size?: number;
+  /** Hide “Fit score” caption — for inline header placement. */
+  compact?: boolean;
 }) {
-  const size = 112;
-  const stroke = 10;
+  const stroke = size >= 100 ? 10 : size >= 70 ? 8 : 6;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, score));
@@ -61,13 +66,29 @@ export function QualifyScoreDonut({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={cn("text-3xl font-semibold tabular-nums", tone)}>
+          <span
+            className={cn(
+              "font-semibold tabular-nums",
+              size >= 100 ? "text-3xl" : size >= 70 ? "text-xl" : "text-base",
+              tone
+            )}
+          >
             {clamped}
           </span>
         </div>
       </div>
-      <p className={cn("text-sm font-medium", tone)}>{fitScoreLabel(clamped)}</p>
-      <p className="text-[11px] text-muted-foreground">Fit score</p>
+      <p
+        className={cn(
+          "font-medium leading-none",
+          size >= 100 ? "text-sm" : "text-[11px]",
+          tone
+        )}
+      >
+        {fitScoreLabel(clamped)}
+      </p>
+      {compact ? null : (
+        <p className="text-[11px] text-muted-foreground">Fit score</p>
+      )}
     </div>
   );
 }

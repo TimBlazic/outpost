@@ -61,6 +61,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AttachmentsPanel } from "@/components/attachments-panel";
 import { LeadQuickActions } from "@/components/lead-quick-actions";
 import { GenerateEmailButton } from "@/components/generate-email-button";
+import { QualifyLeadButton } from "@/components/qualify-lead-button";
+import { QualifyScoreDonut } from "@/components/qualify-score-donut";
 import { Markdown } from "@/components/markdown";
 import {
   DropdownMenu,
@@ -206,9 +208,9 @@ export function LeadDetail({
 
       {/* Header */}
       <header className="space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Select
                 aria-label="Change status"
                 className={cn(
@@ -239,65 +241,83 @@ export function LeadDetail({
                 </Badge>
               ))}
             </div>
-            <h1
-              className={cn(
-                "font-semibold tracking-tight",
-                drawer ? "text-2xl" : "text-3xl"
-              )}
-            >
-              {lead.company}
-            </h1>
-            <p className="text-muted-foreground">
-              {lead.contact}
-              {lead.category ? ` · ${lead.category}` : ""}
-              {lead.country ? ` · ${lead.country}` : ""}
-              {lead.source ? ` · via ${lead.source}` : ""}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <CopyLeadBriefButton lead={lead} />
+              <Button variant="outline" asChild>
+                <Link href={`/leads/${lead.id}/edit`}>
+                  <Pencil className="size-4" /> Edit
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link href={`/projects/new?leadId=${lead.id}`}>
+                  Convert to project
+                </Link>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="More actions"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {lead.email && (
+                    <DropdownMenuItem asChild>
+                      <a href={`mailto:${lead.email}`}>Send email</a>
+                    </DropdownMenuItem>
+                  )}
+                  {site && (
+                    <DropdownMenuItem asChild>
+                      <a href={site} target="_blank" rel="noreferrer">
+                        Open website
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <Link href={`/tasks?new=1&leadId=${lead.id}`}>
+                      New task
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="size-4" /> Delete lead
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <CopyLeadBriefButton lead={lead} />
-            <Button variant="outline" asChild>
-              <Link href={`/leads/${lead.id}/edit`}>
-                <Pencil className="size-4" /> Edit
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href={`/projects/new?leadId=${lead.id}`}>
-                Convert to project
-              </Link>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" aria-label="More actions">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {lead.email && (
-                  <DropdownMenuItem asChild>
-                    <a href={`mailto:${lead.email}`}>Send email</a>
-                  </DropdownMenuItem>
+          <div className="flex w-full min-w-0 items-center gap-3 sm:gap-4">
+            {lead.qualifyScore != null ? (
+              <QualifyScoreDonut
+                score={lead.qualifyScore}
+                size={drawer ? 56 : 64}
+                compact
+                className="shrink-0"
+              />
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <h1
+                className={cn(
+                  "font-semibold tracking-tight text-pretty",
+                  drawer ? "text-2xl" : "text-3xl"
                 )}
-                {site && (
-                  <DropdownMenuItem asChild>
-                    <a href={site} target="_blank" rel="noreferrer">
-                      Open website
-                    </a>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem asChild>
-                  <Link href={`/tasks?new=1&leadId=${lead.id}`}>New task</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="size-4" /> Delete lead
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              >
+                {lead.company}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground sm:text-base">
+                {lead.contact}
+                {lead.category ? ` · ${lead.category}` : ""}
+                {lead.country ? ` · ${lead.country}` : ""}
+                {lead.source ? ` · via ${lead.source}` : ""}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -328,6 +348,11 @@ export function LeadDetail({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <QualifyLeadButton
+            leadId={lead.id}
+            website={lead.website}
+            onDone={afterMutation}
+          />
           <GenerateEmailButton leadId={lead.id} leadEmail={lead.email} />
           <LeadQuickActions leadId={lead.id} />
         </div>
@@ -433,6 +458,8 @@ export function LeadDetail({
               disabled={pending}
               onClick={() =>
                 startTransition(async () => {
+                  // Close drawer first — deleteLead redirects and never returns.
+                  onClose?.();
                   await deleteLead(lead.id);
                 })
               }
@@ -874,7 +901,7 @@ function NotesPanel({
             key={n.id}
             className={cn(
               "space-y-2 p-4",
-              n.pinned && "bg-amber-50/40"
+              n.pinned && "bg-amber-50/40 dark:bg-amber-400/10"
             )}
           >
             {editingId === n.id ? (

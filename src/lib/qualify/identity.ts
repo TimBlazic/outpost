@@ -16,21 +16,44 @@ function parseJsonObject(text: string): Record<string, unknown> {
   return JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
 }
 
+/** Footer often credits the agency / CMS / builder — never treat those as the business. */
+const VENDOR_OR_TOOL =
+  /\b(wix|squarespace|webflow|shopify|wordpress|woocommerce|jimdo|weebly|duda|hubspot|ghost|framer|carrd|bubble|webnode|spletnik|1and1|ionos|godaddy|hostinger|vercel|netlify|github|elementor|divi)\b/i;
+
+const AGENCY_CREDIT =
+  /\b(izdelava|izdelal|izdelala|naredil|naredila|designed by|built by|powered by|created by|website by|spletno stran|web design|webagency|agencija|studio za)\b/i;
+
+function looksLikeVendorOrTool(name: string): boolean {
+  const n = name.trim();
+  if (!n) return true;
+  if (VENDOR_OR_TOOL.test(n)) return true;
+  if (AGENCY_CREDIT.test(n)) return true;
+  return false;
+}
+
 function heuristicIdentity(
   website: string,
-  site: QualifySiteResult
+  site: QualifySiteResult,
+  knownCompanyName?: string | null
 ): QualifyIdentityResult {
   const host = websiteHost(website);
-  const name =
-    site.companyNameHint ||
-    site.title?.split(/[|\-–—]/)[0]?.trim() ||
-    host;
+  const known = knownCompanyName?.trim() || "";
+  const hint =
+    site.companyNameHint && !looksLikeVendorOrTool(site.companyNameHint)
+      ? site.companyNameHint
+      : null;
+  const titleBit = site.title?.split(/[|\-–—]/)[0]?.trim() || null;
+  const titleOk =
+    titleBit && !looksLikeVendorOrTool(titleBit) ? titleBit : null;
+  const name = known || hint || titleOk || host;
   return {
     companyName: name,
-    tradeName: site.companyNameHint,
-    confidence: site.companyNameHint ? 45 : 20,
+    tradeName: hint && hint !== name ? hint : null,
+    confidence: known ? 70 : hint ? 45 : 20,
     source: "heuristic",
-    notes: "AI identity extract unavailable; used page heuristics.",
+    notes: known
+      ? "Used known company name (CRM / Maps) with page heuristics."
+      : "AI identity extract unavailable; used page heuristics.",
   };
 }
 
@@ -41,10 +64,13 @@ function heuristicIdentity(
 export async function extractCompanyIdentity(input: {
   website: string;
   site: QualifySiteResult;
+  /** Strong prior from Hunt / CRM / Google Places — verify, don't invent a different firm. */
+  knownCompanyName?: string | null;
 }): Promise<QualifyIdentityResult> {
+  const known = input.knownCompanyName?.trim() || "";
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
-    return heuristicIdentity(input.website, input.site);
+    return heuristicIdentity(input.website, input.site, known);
   }
 
   try {
@@ -53,26 +79,34 @@ export async function extractCompanyIdentity(input: {
     const message = await client.messages.create({
       model: modelId(),
       max_tokens: 400,
-      system: `You extract the real company / business name from a website.
+      system: `You extract the real company / business name that OWNS THIS website (the client business).
 Return ONLY valid JSON:
 {
-  "companyName": string,   // best legal or official name as on the site (prefer "X d.o.o." / "X s.p." when shown)
+  "companyName": string,   // best legal or official name (prefer "X d.o.o." / "X s.p." when shown)
   "tradeName": string|null, // brand / site name if different from legal name
   "confidence": number,    // 0-100
   "notes": string          // one short sentence on where you found it
 }
 Rules:
-- Prefer footer, copyright, imprint, about, JSON-LD Organization, invoice/legal mentions.
+- Prefer copyright of the BUSINESS, imprint/impresum, about, JSON-LD Organization for the site owner.
+- Slovenian sites often hide "d.o.o." / "s.p." in footer — use that ONLY if it is the site owner's firm.
+- IGNORE website credits in the footer: agencies, freelancers, "izdelava spletne strani", "designed by",
+  "powered by", "built with", Webflow/Wix/Shopify/WordPress/Elementor/theme authors, hosting brands.
+  Those are vendors — NEVER use them as companyName.
 - Do NOT invent a legal form if the site never shows it.
-- Domain labels (e.g. kbiro.si) are weak — only use as last resort.
+- Domain labels are weak — only use as last resort.
 - If brand ≠ legal name, put brand in tradeName and legal in companyName.
-- Slovenian sites often hide "d.o.o." in the footer — look there.`,
+- If a knownCompanyName is provided (Google Maps/CRM), treat it as a strong prior for the business.
+  Confirm against the page. Only replace when the page clearly shows the SAME business under a legal name.
+  NEVER return an unrelated third company (agency, tool, random d.o.o. in credits).
+- If the page is thin/unclear, return knownCompanyName (or host) with lower confidence.`,
       messages: [
         {
           role: "user",
           content: [
             `Website: ${input.website}`,
             `Host: ${host}`,
+            `Known company name (Maps/CRM): ${known || "(none)"}`,
             `Title: ${input.site.title ?? ""}`,
             `Meta: ${input.site.description ?? ""}`,
             `Heuristic hint: ${input.site.companyNameHint ?? ""}`,
@@ -89,25 +123,51 @@ Rules:
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("\n");
     const data = parseJsonObject(text);
-    const companyName = String(data.companyName ?? "").trim();
-    if (!companyName) {
-      return heuristicIdentity(input.website, input.site);
+    let companyName = String(data.companyName ?? "").trim();
+    if (!companyName || looksLikeVendorOrTool(companyName)) {
+      return heuristicIdentity(input.website, input.site, known);
+    }
+
+    // If AI wandered to an unrelated name while we have a strong prior, keep the prior.
+    if (known) {
+      const norm = (s: string) =>
+        s
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/\p{M}/gu, "")
+          .replace(/\b(d\.?\s*o\.?\s*o\.?|s\.?\s*p\.?)\b/g, " ")
+          .replace(/[^a-z0-9]+/g, " ")
+          .trim();
+      const nk = norm(known);
+      const nc = norm(companyName);
+      const overlaps =
+        nk.length >= 3 &&
+        nc.length >= 3 &&
+        (nk.includes(nc) ||
+          nc.includes(nk) ||
+          nk.split(" ").some((w) => w.length > 3 && nc.includes(w)));
+      if (!overlaps) {
+        companyName = known;
+      }
     }
 
     const confidenceRaw = Number(data.confidence);
-    const confidence = Number.isFinite(confidenceRaw)
+    let confidence = Number.isFinite(confidenceRaw)
       ? Math.max(0, Math.min(100, Math.round(confidenceRaw)))
       : 60;
+    if (known && companyName === known) {
+      confidence = Math.max(confidence, 72);
+    }
     const tradeName = String(data.tradeName ?? "").trim() || null;
 
     return {
       companyName,
-      tradeName,
+      tradeName: tradeName && tradeName !== companyName ? tradeName : null,
       confidence,
       source: "ai",
       notes: String(data.notes ?? "").trim() || undefined,
     };
   } catch {
-    return heuristicIdentity(input.website, input.site);
+    return heuristicIdentity(input.website, input.site, known);
   }
 }

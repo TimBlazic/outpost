@@ -114,6 +114,14 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
     leads.find((l) => l.id === selectedId) ??
     null;
 
+  // Lead removed (e.g. deleted) while drawer was open — don't keep fetching.
+  useEffect(() => {
+    if (selectedId && !allLeads.some((l) => l.id === selectedId)) {
+      setSelectedId(null);
+      setBundle(null);
+    }
+  }, [allLeads, selectedId]);
+
   const loadBundle = useCallback(async (id: string) => {
     setBundleLoading(true);
     try {

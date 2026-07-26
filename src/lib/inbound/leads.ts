@@ -185,6 +185,8 @@ export async function createInboundLead(payload: InboundLeadPayload) {
     notes: 1,
     createdBy: "website",
     description,
+    qualifyScore: null,
+    qualifyRating: null,
   };
 
   const note: Note = {

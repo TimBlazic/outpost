@@ -117,12 +117,25 @@ export type Lead = {
   createdBy: string;
   /** Freeform research / pitch text (markdown). */
   description: string;
+  /** 0–100 fit score from Qualify; null if never qualified. */
+  qualifyScore: number | null;
+  /** AI verdict rating from Qualify. */
+  qualifyRating: "go" | "maybe" | "no-go" | null;
 };
 
 export function normalizeLead(l: Lead): Lead {
+  const rating = l.qualifyRating;
   return {
     ...l,
     description: l.description ?? "",
+    qualifyScore:
+      typeof l.qualifyScore === "number" && Number.isFinite(l.qualifyScore)
+        ? Math.max(0, Math.min(100, Math.round(l.qualifyScore)))
+        : null,
+    qualifyRating:
+      rating === "go" || rating === "maybe" || rating === "no-go"
+        ? rating
+        : null,
   };
 }
 
@@ -147,6 +160,8 @@ export const leads: Lead[] = [
     tags: ["redesign", "hot"],
     notes: 4,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u1",
   },
   {
@@ -169,6 +184,8 @@ export const leads: Lead[] = [
     tags: ["web app"],
     notes: 6,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u2",
   },
   {
@@ -191,6 +208,8 @@ export const leads: Lead[] = [
     tags: ["redesign", "figma"],
     notes: 2,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u1",
   },
   {
@@ -213,6 +232,8 @@ export const leads: Lead[] = [
     tags: ["ai agent", "enterprise"],
     notes: 3,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u2",
   },
   {
@@ -235,6 +256,8 @@ export const leads: Lead[] = [
     tags: ["shopify"],
     notes: 1,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u1",
   },
   {
@@ -257,6 +280,8 @@ export const leads: Lead[] = [
     tags: ["new website"],
     notes: 2,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u2",
   },
   {
@@ -279,6 +304,8 @@ export const leads: Lead[] = [
     tags: ["small"],
     notes: 1,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u1",
   },
   {
@@ -301,6 +328,8 @@ export const leads: Lead[] = [
     tags: ["web app", "won"],
     notes: 8,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u2",
   },
   {
@@ -323,6 +352,8 @@ export const leads: Lead[] = [
     tags: [],
     notes: 0,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u1",
   },
   {
@@ -345,6 +376,8 @@ export const leads: Lead[] = [
     tags: ["budget"],
     notes: 3,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u2",
   },
   {
@@ -367,6 +400,8 @@ export const leads: Lead[] = [
     tags: [],
     notes: 0,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u1",
   },
   {
@@ -389,6 +424,8 @@ export const leads: Lead[] = [
     tags: ["shopify", "redesign"],
     notes: 0,
     description: "",
+    qualifyScore: null,
+    qualifyRating: null,
     createdBy: "u2",
   },
 ];

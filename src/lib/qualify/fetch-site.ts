@@ -55,22 +55,29 @@ function companyNameHintFrom(
   return ogSite || appName || fromTitle;
 }
 
+const VENDOR_CREDIT =
+  /\b(izdelava|izdelal|izdelala|naredil|designed by|built by|powered by|created by|website by|spletno stran|webflow|wix|shopify|wordpress|elementor|hostinger|spletnik)\b/i;
+
 /** Pull lines that often contain the legal company name. */
 function identitySnippetsFrom(
   $: ReturnType<typeof cheerio.load>,
   text: string
 ): string[] {
   const snippets: string[] = [];
-  const push = (raw: string) => {
+  const push = (raw: string, creditHint = false) => {
     const s = raw.replace(/\s+/g, " ").trim();
     if (s.length < 4 || s.length > 220) return;
-    if (snippets.some((x) => x.toLowerCase() === s.toLowerCase())) return;
-    snippets.push(s);
+    const tagged =
+      creditHint || VENDOR_CREDIT.test(s) ? `[site-credit] ${s}` : s;
+    if (snippets.some((x) => x.toLowerCase() === tagged.toLowerCase())) return;
+    snippets.push(tagged);
   };
 
   $("footer, [role='contentinfo'], .footer, #footer, .site-footer").each(
     (_, el) => {
-      push($(el).text());
+      const t = $(el).text();
+      // Whole footer is noisy — still include, but mark likely credits.
+      push(t, VENDOR_CREDIT.test(t));
     }
   );
 

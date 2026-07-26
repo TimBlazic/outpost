@@ -64,7 +64,7 @@ export async function runQualifyVerdict(input: {
   const message = await client.messages.create({
     model: modelId(),
     max_tokens: 1200,
-    system: `You qualify Slovenian (and nearby) businesses for a small studio that sells website redesigns / new marketing sites.
+    system: `You qualify Slovenian (and nearby) businesses for a one-person studio that sells website redesigns / new marketing sites in Slovenia.
 Return ONLY valid JSON with keys:
 rating ("go"|"maybe"|"no-go"),
 reasons (string array, 3-5 short bullets),
@@ -72,7 +72,12 @@ notesMarkdown (short markdown),
 company, contact, email, phone, country, category, value (number EUR estimate or 0).
 category MUST be one of: ${leadCategories.join(", ")}.
 Prefer country "Slovenia" when unclear. Use emails/phones from site data when present.
-For "company", prefer the resolved identity / Companywall legal name over the domain brand when they differ.
+For "company", prefer the resolved identity name that matches THIS website. If Companywall looks like a different firm, ignore it for the company field and say so in reasons.
+Pricing (value) MUST be Slovenia-realistic for a solo studio — NOT US/EU agency rates:
+- Local business / restaurant / salon / clinic: typically 1200–3500 EUR (redesign or new marketing site)
+- Small SaaS / e-commerce / agency: typically 2500–6000 EUR
+- Never suggest above 8000 EUR unless clearly a multi-page web app (still cap mental model at ~8k)
+- Prefer round numbers like 1800, 2500, 3200
 Be honest: weak finances or a strong modern site → maybe/no-go.`,
     messages: [
       {
@@ -147,10 +152,25 @@ Be honest: weak finances or a strong modern site → maybe/no-go.`,
         phoneFromSite,
       country: String(data.country ?? "").trim() || "Slovenia",
       category,
-      value: Number.isFinite(Number(data.value)) ? Number(data.value) : 0,
+      value: clampSlValue(
+        Number.isFinite(Number(data.value)) ? Number(data.value) : 0,
+        category
+      ),
       status: statusForRating(rating),
     },
   };
+}
+
+function clampSlValue(value: number, category: Lead["category"]): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const localish = [
+    "Local business",
+    "Restaurant",
+    "Healthcare",
+    "Real estate",
+  ].includes(category);
+  const max = localish ? 4500 : 8000;
+  return Math.round(Math.min(max, Math.max(800, value)));
 }
 
 export async function runQualifyDraft(input: {
@@ -192,6 +212,8 @@ export async function runQualifyDraft(input: {
     notes: 0,
     createdBy: "qualify",
     description: input.suggested.description,
+    qualifyScore: null,
+    qualifyRating: null,
   };
 
   return generateLeadEmail({
