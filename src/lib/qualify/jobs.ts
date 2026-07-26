@@ -16,10 +16,13 @@ export const BULK_QUALIFY_CAP = 200;
 
 export function isLeadQualifyEligible(lead: {
   website?: string | null;
+  company?: string | null;
   qualifyScore?: number | null;
   tags?: string[];
 }) {
-  if (!(lead.website ?? "").trim()) return false;
+  const hasHandle =
+    Boolean((lead.website ?? "").trim()) || Boolean((lead.company ?? "").trim());
+  if (!hasHandle) return false;
   if (lead.qualifyScore != null) return false;
   if ((lead.tags ?? []).includes("qualified")) return false;
   return true;
@@ -53,13 +56,15 @@ export async function enqueueLeadQualify(
   if (!lead) return { enqueued: false, reason: "not_found" };
 
   const force = Boolean(opts?.force);
+  const hasHandle =
+    Boolean(lead.website?.trim()) || Boolean(lead.company?.trim());
   if (force) {
-    if (!(lead.website ?? "").trim()) {
-      return { enqueued: false, reason: "no_website" };
+    if (!hasHandle) {
+      return { enqueued: false, reason: "no_company_or_website" };
     }
   } else if (!isLeadQualifyEligible(lead)) {
-    if (!(lead.website ?? "").trim()) {
-      return { enqueued: false, reason: "no_website" };
+    if (!hasHandle) {
+      return { enqueued: false, reason: "no_company_or_website" };
     }
     return { enqueued: false, reason: "already_qualified" };
   }
@@ -163,12 +168,12 @@ export async function flushLeadQualifyJobs(): Promise<{
 
   try {
     const lead = await getLeadById(claimed.lead_id as string);
-    if (!lead?.website?.trim()) {
+    if (!lead?.website?.trim() && !lead?.company?.trim()) {
       await supabase
         .from("lead_qualify_jobs")
         .update({
           status: "skipped",
-          last_error: "no_website",
+          last_error: "no_company_or_website",
           updated_at: new Date().toISOString(),
         })
         .eq("id", claimed.id);

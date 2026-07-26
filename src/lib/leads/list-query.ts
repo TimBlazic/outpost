@@ -17,7 +17,8 @@ export type LeadSortKey =
   | "value"
   | "probability"
   | "followUp"
-  | "score";
+  | "score"
+  | "added";
 
 export type LeadSortDir = "asc" | "desc";
 
@@ -39,6 +40,7 @@ const SORT_KEYS: readonly LeadSortKey[] = [
   "probability",
   "followUp",
   "score",
+  "added",
 ];
 
 const STATUS_INDEX = new Map(
@@ -186,6 +188,9 @@ export function sortLeadsWithNullsLast(
         break;
       case "score":
         cmp = (a.qualifyScore ?? 0) - (b.qualifyScore ?? 0);
+        break;
+      case "added":
+        cmp = (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
         break;
     }
     if (cmp !== 0) return cmp * mult;

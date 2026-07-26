@@ -1,3 +1,5 @@
+import type { HuntSiteSignal } from "./preview";
+
 export type ProspectStatus = "pooled" | "queued_today" | "kept" | "skipped";
 
 export type Prospect = {
@@ -12,6 +14,11 @@ export type Prospect = {
   status: ProspectStatus;
   queuedOn: string | null;
   leadId: string | null;
+  siteTitle: string | null;
+  siteDescription: string | null;
+  siteCms: string | null;
+  siteSignal: HuntSiteSignal | null;
+  sitePreviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

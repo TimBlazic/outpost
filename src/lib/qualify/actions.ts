@@ -22,13 +22,13 @@ import type { QualifyRating, QualifyResult } from "./types";
 import { runQualifyDraft } from "./verdict";
 
 export async function runLeadQualifyAction(input: {
-  websiteUrl: string;
+  websiteUrl?: string;
   companywallUrl?: string;
   knownCompanyName?: string;
 }): Promise<QualifyResult> {
   await requireStudioSession();
   return qualifyLead({
-    websiteUrl: input.websiteUrl,
+    websiteUrl: input.websiteUrl?.trim() || null,
     companywallUrl: input.companywallUrl?.trim() || null,
     knownCompanyName: input.knownCompanyName?.trim() || null,
   });

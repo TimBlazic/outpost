@@ -188,6 +188,7 @@ export async function createInboundLead(payload: InboundLeadPayload) {
     ),
     notes: 1,
     createdBy: "website",
+    createdAt: new Date().toISOString(),
     description,
     qualifyScore: null,
     qualifyRating: null,
@@ -243,6 +244,7 @@ export async function createInboundLead(payload: InboundLeadPayload) {
       next_follow_up: lead.nextFollowUp,
       tags: lead.tags,
       created_by: lead.createdBy,
+      created_at: lead.createdAt,
       description: lead.description,
     });
     if (leadErr) throw new Error(leadErr.message);

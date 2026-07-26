@@ -81,6 +81,7 @@ function mapLead(row: Record<string, unknown>): Lead {
     tags: (row.tags as string[]) ?? [],
     notes: Number(row.notes_count ?? 0),
     createdBy: row.created_by as string,
+    createdAt: (row.created_at as string) ?? "",
     description: (row.description as string) ?? "",
     qualifyScore:
       row.qualify_score == null || row.qualify_score === ""
@@ -113,6 +114,7 @@ function leadRow(l: Lead) {
     next_follow_up: dateOrNull(l.nextFollowUp),
     tags: l.tags,
     created_by: l.createdBy,
+    created_at: l.createdAt || new Date().toISOString(),
     description: l.description ?? "",
     qualify_score: l.qualifyScore,
     qualify_rating: l.qualifyRating,

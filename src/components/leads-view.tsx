@@ -24,7 +24,7 @@ import {
   type Quote,
 } from "@/lib/data";
 import { getLeadDetailAction } from "@/lib/actions";
-import { eur, fmtDate, dueState, leadStatusColor } from "@/lib/format";
+import { eur, fmtDate, fmtDateTime, dueState, leadStatusColor } from "@/lib/format";
 import {
   filterLeads,
   isOpenStatusFilter,
@@ -438,6 +438,13 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
                       dir={listQuery.dir}
                       onSort={onSort}
                     />
+                    <SortableHead
+                      label="Added"
+                      sortKey="added"
+                      current={listQuery.sort}
+                      dir={listQuery.dir}
+                      onSort={onSort}
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -505,6 +512,9 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
                       </TableCell>
                       <TableCell>
                         <FollowUpCell date={l.nextFollowUp} />
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums text-sm text-muted-foreground">
+                        {fmtDateTime(l.createdAt)}
                       </TableCell>
                     </ClickableRow>
                   ))}

@@ -138,7 +138,7 @@ const STATIC_ACTIONS: PaletteItem[] = [
   {
     id: "go-hunt",
     title: "Hunt",
-    subtitle: "Find firms · five a day",
+    subtitle: "Find firms by industry + city",
     href: "/hunt",
     icon: Binoculars,
     section: "Go to",

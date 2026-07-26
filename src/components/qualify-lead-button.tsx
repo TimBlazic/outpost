@@ -12,16 +12,19 @@ import { useQualifyQueue } from "@/lib/qualify/use-qualify-queue";
 export function QualifyLeadButton({
   leadId,
   website,
+  company,
   onDone,
 }: {
   leadId: string;
   website: string;
+  company?: string;
   onDone?: () => void;
 }) {
   const router = useRouter();
   const queue = useQualifyQueue();
   const handledSeq = useRef(0);
-  const hasSite = Boolean(website?.trim());
+  const canQualify =
+    Boolean(website?.trim()) || Boolean(company?.trim());
   const [serverQueued, setServerQueued] = useState(false);
   const inQueue =
     serverQueued ||
@@ -38,13 +41,13 @@ export function QualifyLeadButton({
       }
     };
     void tick();
-    if (!inQueue && !hasSite) return;
+    if (!inQueue && !canQualify) return;
     const id = window.setInterval(tick, 3000);
     return () => {
       alive = false;
       window.clearInterval(id);
     };
-  }, [leadId, inQueue, hasSite]);
+  }, [leadId, inQueue, canQualify]);
 
   useEffect(() => {
     const done = queue.lastCompleted;
@@ -61,8 +64,8 @@ export function QualifyLeadButton({
     }
   }, [serverQueued, onDone, router]);
 
-  const label = !hasSite
-    ? "No website"
+  const label = !canQualify
+    ? "Need company"
     : inQueue
       ? "Qualifying…"
       : "Qualify lead";
@@ -71,13 +74,15 @@ export function QualifyLeadButton({
     <Button
       type="button"
       variant="outline"
-      disabled={!hasSite || inQueue}
+      disabled={!canQualify || inQueue}
       title={
-        !hasSite
-          ? "Add a website on the lead (Edit) — Qualify needs a URL"
+        !canQualify
+          ? "Add a company name (or website) — Qualify needs something to research"
           : inQueue
             ? "Qualify running…"
-            : "Research site + Companywall and update this lead"
+            : website?.trim()
+              ? "Research site + Companywall and update this lead"
+              : "Research company via Companywall (no website) and update this lead"
       }
       onClick={() => enqueueQualify(leadId, true)}
     >

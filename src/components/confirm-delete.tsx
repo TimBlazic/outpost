@@ -19,12 +19,16 @@ export function ConfirmDelete({
   onConfirm,
   trigger,
   pending: pendingProp,
+  confirmLabel = "Delete",
+  pendingLabel = "Deleting…",
 }: {
   title: string;
   description: string;
   onConfirm: () => void | Promise<void>;
   trigger?: React.ReactNode;
   pending?: boolean;
+  confirmLabel?: string;
+  pendingLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -69,7 +73,7 @@ export function ConfirmDelete({
             onClick={handleConfirm}
             disabled={busy}
           >
-            {busy ? "Deleting…" : "Delete"}
+            {busy ? pendingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

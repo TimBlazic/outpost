@@ -115,6 +115,8 @@ export type Lead = {
   tags: string[];
   notes: number; // count
   createdBy: string;
+  /** ISO timestamp when the lead was added (`leads.created_at`). */
+  createdAt: string;
   /** Freeform research / pitch text (markdown). */
   description: string;
   /** 0–100 fit score from Qualify; null if never qualified. */
@@ -123,10 +125,20 @@ export type Lead = {
   qualifyRating: "go" | "maybe" | "no-go" | null;
 };
 
-export function normalizeLead(l: Lead): Lead {
+export function normalizeLead(
+  l: Omit<Lead, "createdAt" | "description" | "qualifyScore" | "qualifyRating"> &
+    Partial<
+      Pick<Lead, "createdAt" | "description" | "qualifyScore" | "qualifyRating">
+    >
+): Lead {
   const rating = l.qualifyRating;
+  const createdAt =
+    (l.createdAt ?? "").trim() ||
+    (l.firstContact ? `${l.firstContact}T12:00:00.000Z` : "") ||
+    "2026-01-01T00:00:00.000Z";
   return {
     ...l,
+    createdAt,
     description: l.description ?? "",
     qualifyScore:
       typeof l.qualifyScore === "number" && Number.isFinite(l.qualifyScore)
@@ -139,7 +151,15 @@ export function normalizeLead(l: Lead): Lead {
   };
 }
 
-export const leads: Lead[] = [
+type LeadSeed = Omit<
+  Lead,
+  "createdAt" | "description" | "qualifyScore" | "qualifyRating"
+> &
+  Partial<
+    Pick<Lead, "createdAt" | "description" | "qualifyScore" | "qualifyRating">
+  >;
+
+const leadSeeds: LeadSeed[] = [
   {
     id: "l1",
     company: "Nordic Coffee Co.",
@@ -429,6 +449,8 @@ export const leads: Lead[] = [
     createdBy: "u2",
   },
 ];
+
+export const leads: Lead[] = leadSeeds.map((l) => normalizeLead({ ...l }));
 
 export function leadById(id: string) {
   return leads.find((l) => l.id === id);

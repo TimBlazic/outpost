@@ -20,8 +20,14 @@ export function computeFitScore(r: QualifyResult): number {
       else if (avg > 85) score -= 12;
       else if (avg > 75) score -= 6;
     }
-  } else {
+  } else if (r.website?.trim()) {
     score -= 3;
+  }
+
+  const noWebsite = !r.website?.trim();
+  if (noWebsite) {
+    // Missing site is often a new-build opportunity, not a fetch failure.
+    score += 6;
   }
 
   if (r.identity.source === "ai" && r.identity.confidence >= 70) score += 2;
@@ -36,7 +42,7 @@ export function computeFitScore(r: QualifyResult): number {
   }
 
   if (r.site.emails.length > 0 || r.companywall.email) score += 2;
-  if (r.site.error) score -= 4;
+  if (r.site.error && !noWebsite) score -= 4;
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }

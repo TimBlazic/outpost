@@ -41,13 +41,25 @@ export async function applyQualifyToLead(leadId: string): Promise<{
 }> {
   const lead = await getLeadById(leadId);
   if (!lead) throw new Error("Lead not found");
-  if (!lead.website?.trim()) {
-    throw new Error("Lead has no website to qualify");
+  if (!lead.website?.trim() && !lead.company?.trim()) {
+    throw new Error("Lead needs a company name or website to qualify");
   }
 
   const result = await qualifyLead({
-    websiteUrl: lead.website,
+    websiteUrl: lead.website?.trim() || null,
     knownCompanyName: lead.company,
+    leadContext: [
+      lead.category ? `Category: ${lead.category}` : null,
+      lead.country ? `Country: ${lead.country}` : null,
+      lead.contact ? `Contact: ${lead.contact}` : null,
+      lead.email ? `Email: ${lead.email}` : null,
+      lead.phone ? `Phone: ${lead.phone}` : null,
+      lead.description?.trim()
+        ? `Existing notes:\n${lead.description.trim().slice(0, 1200)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
   });
   const rating = result.verdict.rating;
   const s = result.suggested;
@@ -95,7 +107,7 @@ export async function applyQualifyToLead(leadId: string): Promise<{
         ? {
             ...l,
             company: nextCompany,
-            website: result.website || l.website,
+            website: result.website.trim() || l.website,
             contact: s.contact.trim() || l.contact,
             email: s.email.trim() || l.email,
             phone: s.phone.trim() || l.phone,
@@ -126,7 +138,7 @@ export async function applyQualifyToLead(leadId: string): Promise<{
   await addActivity(leadId, {
     type: "note",
     title: `Qualified in background (${rating})`,
-    detail: result.website,
+    detail: result.website.trim() || lead.company,
   });
 
   if (result.draft.body.trim()) {

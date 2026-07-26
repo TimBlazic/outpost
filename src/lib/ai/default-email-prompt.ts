@@ -19,7 +19,7 @@ Openings (critical)
 
 Hard rules
 - Subject: max ~7 words, no clickbait, no ALL CAPS, no emojis.
-- Body: ~90-160 words. A few short paragraphs with line breaks. One clear CTA.
+- Body: ~150-240 words. A few short paragraphs with line breaks (enough room for one concrete observation, what you'd improve, and the offer — not a wall of text). One clear CTA.
 - CTA must NOT invite a call, Zoom, "quick chat", or meeting.
 - CTA should offer a small, no-obligation piece of work so they can see how it would look if interested (e.g. a sample section, homepage tweak concept, short audit note, mock of one screen, tailored to the lead). Make it easy to say yes or ignore.
 - No buzzword soup (synergy, leverage, cutting-edge, "just circling back" unless follow-up).

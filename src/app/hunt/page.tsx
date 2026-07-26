@@ -10,12 +10,12 @@ export default async function HuntPage() {
     <div className="space-y-6 p-4 lg:p-6">
       <PageHeader
         title="Hunt"
-        description="Find firms. Review five a day."
+        description="Search, skim site previews, then Keep or Skip."
       />
       <HuntBoard
         enabled={data.enabled}
         initialToday={data.today}
-        pooledCount={data.pooledCount}
+        reviewCount={data.reviewCount}
       />
     </div>
   );

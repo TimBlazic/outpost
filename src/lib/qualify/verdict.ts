@@ -36,11 +36,15 @@ export async function runQualifyVerdict(input: {
   identity: QualifyIdentityResult;
   lighthouse: QualifyLighthouseResult;
   companywall: QualifyCompanywallResult;
+  leadContext?: string | null;
+  hasWebsite?: boolean;
 }): Promise<{
   verdict: {
     rating: QualifyRating;
     reasons: string[];
     notesMarkdown: string;
+    businessSummary: string;
+    offerIdeas: string[];
   };
   suggested: {
     company: string;
@@ -60,30 +64,44 @@ export async function runQualifyVerdict(input: {
     );
   }
 
+  const hasWebsite = input.hasWebsite ?? Boolean(input.website?.trim());
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
     model: modelId(),
-    max_tokens: 1200,
-    system: `You qualify Slovenian (and nearby) businesses for a one-person studio that sells website redesigns / new marketing sites in Slovenia.
+    max_tokens: 1600,
+    system: `You qualify Slovenian (and nearby) businesses for a one-person studio that sells website redesigns / new marketing sites, plus related services (custom admin, newsletter, booking, etc.) in Slovenia.
 Return ONLY valid JSON with keys:
 rating ("go"|"maybe"|"no-go"),
-reasons (string array, 3-5 short bullets),
-notesMarkdown (short markdown),
+reasons (string array, 3-5 short bullets — why this rating),
+notesMarkdown (1-3 short sentences of sales judgment; no headings),
+businessSummary (2-4 sentences: what this company does, who they serve${hasWebsite ? ", what the site is for" : ""} — write in English, concrete, from available evidence),
+offerIdeas (string array, 3-6 concrete pitches tailored to THIS business — pick from / mix: website redesign, new marketing site, custom admin panel, newsletter / email marketing setup, booking system, SEO / performance fix, e-commerce improvements, landing pages, content refresh. Each item one short line like "Redesign: replace dated WordPress with a fast marketing site"),
 company, contact, email, phone, country, category, value (number EUR estimate or 0).
 category MUST be one of: ${leadCategories.join(", ")}.
-Prefer country "Slovenia" when unclear. Use emails/phones from site data when present.
-For "company", prefer the resolved identity name that matches THIS website. If Companywall looks like a different firm, ignore it for the company field and say so in reasons.
+Prefer country "Slovenia" when unclear. Use emails/phones from site / Companywall when present.
+For "company", prefer the resolved identity name${hasWebsite ? " that matches THIS website" : ""}. If Companywall looks like a different firm, ignore it for the company field and say so in reasons.
+${
+  hasWebsite
+    ? "When a website exists: judge site quality + finances. Strong modern site → maybe/no-go."
+    : `NO WEBSITE on this lead — that is often a strong opportunity (new marketing site), not an automatic no-go.
+Use company name + Companywall + any CRM context. Infer industry/services best-effort.
+offerIdeas MUST lean into: new marketing website, Google Business / presence, booking, newsletter, simple admin — not "redesign an existing site" unless evidence they have one.
+Still no-go if finances look dead, company looks dissolved, or it's clearly not a fit.`
+}
 Pricing (value) MUST be Slovenia-realistic for a solo studio — NOT US/EU agency rates:
 - Local business / restaurant / salon / clinic: typically 1200–3500 EUR (redesign or new marketing site)
 - Small SaaS / e-commerce / agency: typically 2500–6000 EUR
 - Never suggest above 8000 EUR unless clearly a multi-page web app (still cap mental model at ~8k)
 - Prefer round numbers like 1800, 2500, 3200
+Always set a realistic value when rating is go or maybe (not 0).
 Be honest: weak finances or a strong modern site → maybe/no-go.`,
     messages: [
       {
         role: "user",
         content: [
-          `Website: ${input.website}`,
+          hasWebsite
+            ? `Website: ${input.website}`
+            : "Website: (none — qualify from company name + Companywall)",
           `Resolved identity: ${JSON.stringify(input.identity)}`,
           `Title: ${input.site.title ?? ""}`,
           `Meta: ${input.site.description ?? ""}`,
@@ -92,7 +110,12 @@ Be honest: weak finances or a strong modern site → maybe/no-go.`,
           `Excerpt: ${input.site.excerpt}`,
           `Lighthouse: ${JSON.stringify(input.lighthouse)}`,
           `Companywall: ${JSON.stringify(input.companywall)}`,
-        ].join("\n"),
+          input.leadContext?.trim()
+            ? `CRM context:\n${input.leadContext.trim()}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
       },
     ],
   });
@@ -126,11 +149,17 @@ Be honest: weak finances or a strong modern site → maybe/no-go.`,
   const phoneFromSite = input.site.phones[0] ?? "";
   const contactFromCw = cwTrusted ? input.companywall.owner ?? "" : "";
 
+  const offerIdeas = Array.isArray(data.offerIdeas)
+    ? data.offerIdeas.map((r) => String(r).trim()).filter(Boolean).slice(0, 8)
+    : [];
+
   return {
     verdict: {
       rating,
       reasons,
       notesMarkdown: String(data.notesMarkdown ?? ""),
+      businessSummary: String(data.businessSummary ?? "").trim(),
+      offerIdeas,
     },
     suggested: {
       company:
@@ -211,6 +240,7 @@ export async function runQualifyDraft(input: {
     tags: ["qualified"],
     notes: 0,
     createdBy: "qualify",
+    createdAt: new Date().toISOString(),
     description: input.suggested.description,
     qualifyScore: null,
     qualifyRating: null,
@@ -219,7 +249,9 @@ export async function runQualifyDraft(input: {
   return generateLeadEmail({
     lead: synthetic,
     intent: "cold",
-    brief: "Cold outreach after website + Companywall research.",
+    brief: input.website.trim()
+      ? "Cold outreach after website + Companywall research."
+      : "Cold outreach after company / Companywall research (no website yet — pitch a new site if it fits).",
     activities: [],
     settings: input.settings,
     senderName: input.senderName,

@@ -5,30 +5,87 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExternalLink, MapPin } from "lucide-react";
 
+import { ConfirmDelete } from "@/components/confirm-delete";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  clearHuntReview,
   keepProspect,
   searchAndPool,
   skipProspect,
 } from "@/lib/hunt/actions";
+import type { HuntSiteSignal } from "@/lib/hunt/preview";
 import type { Prospect } from "@/lib/hunt/types";
 import { enqueueQualify } from "@/lib/qualify/queue";
 import { useQualifyQueue } from "@/lib/qualify/use-qualify-queue";
+import { cn } from "@/lib/utils";
 
 const LS_QUERY = "hunt:query";
 const LS_CITY = "hunt:city";
 
+function hostLabel(website: string | null): string | null {
+  if (!website?.trim()) return null;
+  try {
+    const raw = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+    return new URL(raw).hostname.replace(/^www\./i, "");
+  } catch {
+    return website;
+  }
+}
+
+function signalMeta(signal: HuntSiteSignal | null): {
+  label: string;
+  className: string;
+} {
+  switch (signal) {
+    case "dated":
+      return {
+        label: "Dated",
+        className:
+          "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+      };
+    case "modern":
+      return {
+        label: "Modern",
+        className:
+          "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
+      };
+    case "ok":
+      return {
+        label: "OK",
+        className:
+          "border-sky-500/40 bg-sky-500/10 text-sky-800 dark:text-sky-300",
+      };
+    case "down":
+      return {
+        label: "Down",
+        className:
+          "border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-300",
+      };
+    case "none":
+      return {
+        label: "No site",
+        className: "border-border bg-muted text-muted-foreground",
+      };
+    default:
+      return {
+        label: "Pending",
+        className: "border-border bg-muted text-muted-foreground",
+      };
+  }
+}
+
 export function HuntBoard({
   enabled,
   initialToday,
-  pooledCount,
+  reviewCount,
 }: {
   enabled: boolean;
   initialToday: Prospect[];
-  pooledCount: number;
+  reviewCount: number;
 }) {
   const router = useRouter();
   const qualifyQueue = useQualifyQueue();
@@ -58,10 +115,9 @@ export function HuntBoard({
         <CardContent className="space-y-2 p-6 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Hunt needs Supabase</p>
           <p>
-            Configure Supabase env, run migration{" "}
-            <code className="text-xs">20260726120000_prospects.sql</code>, and
-            set <code className="text-xs">GOOGLE_PLACES_API_KEY</code>. See
-            SETUP-SUPABASE.md.
+            Configure Supabase env, run migrations (incl.{" "}
+            <code className="text-xs">20260726220000_prospect_site_preview.sql</code>
+            ), and set <code className="text-xs">GOOGLE_PLACES_API_KEY</code>.
           </p>
         </CardContent>
       </Card>
@@ -89,11 +145,26 @@ export function HuntBoard({
           `Fetched ${result.fetched} · imported ${result.imported}` +
             (result.skippedKnown
               ? ` · skipped ${result.skippedKnown} known`
-              : "")
+              : "") +
+            ` · previewed ${result.previewed}`
         );
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Search failed");
+      }
+    });
+  }
+
+  function onClear() {
+    setError(null);
+    setLastLeadId(null);
+    startTransition(async () => {
+      try {
+        const result = await clearHuntReview();
+        setStatus(`Cleared ${result.cleared} from review`);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Clear failed");
       }
     });
   }
@@ -105,21 +176,14 @@ export function HuntBoard({
       try {
         const result = await keepProspect(id);
         setLastLeadId(result.leadId);
-        const canQualify = Boolean(prospect?.website?.trim());
-        if (canQualify) {
-          enqueueQualify(result.leadId);
-          setStatus(
-            result.alreadyExisted
-              ? "Already a lead — qualifying in background"
-              : "Kept — qualifying in background"
-          );
-        } else {
-          setStatus(
-            result.alreadyExisted
-              ? "Already a lead — marked kept (no website)"
-              : "Kept as new lead (no website to qualify)"
-          );
-        }
+        enqueueQualify(result.leadId);
+        setStatus(
+          result.alreadyExisted
+            ? "Already a lead — qualifying in background"
+            : prospect?.website?.trim()
+              ? "Kept — qualifying in background"
+              : "Kept — qualifying from company name (no website)"
+        )
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Keep failed");
@@ -173,12 +237,29 @@ export function HuntBoard({
               {pending ? "Working…" : "Search"}
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {pooledCount} waiting in pool
-            {qualifyDepth > 0
-              ? ` · Qualifying ${qualifyDepth} in queue…`
-              : null}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted-foreground">
+              {reviewCount} to review
+              {qualifyDepth > 0
+                ? ` · Qualifying ${qualifyDepth} in queue…`
+                : null}
+            </p>
+            {reviewCount > 0 ? (
+              <ConfirmDelete
+                title="Clear review list?"
+                description="Marks every prospect currently waiting for Keep/Skip as skipped. Kept leads are untouched. You can search again anytime."
+                confirmLabel="Clear"
+                pendingLabel="Clearing…"
+                pending={pending}
+                onConfirm={onClear}
+                trigger={
+                  <Button type="button" variant="outline" size="sm" disabled={pending}>
+                    Clear review
+                  </Button>
+                }
+              />
+            ) : null}
+          </div>
           {qualifyQueue.lastError ? (
             <p className="text-sm text-rose-600 dark:text-rose-400">
               Qualify error: {qualifyQueue.lastError}
@@ -208,76 +289,102 @@ export function HuntBoard({
 
       <div>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-          Today
+          Results
         </h2>
         {initialToday.length === 0 ? (
           <Card>
             <CardContent className="px-6 py-10 text-center text-sm text-muted-foreground">
-              {pooledCount === 0
-                ? "Search to fill the pool — then review five a day."
-                : "Come back tomorrow, or search again to refill."}
+              Search by industry and city — previews load with the results.
             </CardContent>
           </Card>
         ) : (
           <ul className="space-y-3">
-            {initialToday.map((p) => (
-              <li key={p.id}>
-                <Card>
-                  <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="truncate text-sm font-medium">{p.name}</p>
-                      {p.address ? (
-                        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                          <MapPin className="mt-0.5 size-3.5 shrink-0" />
-                          <span>{p.address}</span>
-                        </p>
-                      ) : null}
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                        {p.website ? (
-                          <a
-                            href={p.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-foreground underline-offset-4 hover:underline"
+            {initialToday.map((p) => {
+              const host = hostLabel(p.website);
+              const signal = signalMeta(p.siteSignal);
+              return (
+                <li key={p.id}>
+                  <Card>
+                    <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-medium">{p.name}</p>
+                          <Badge
+                            variant="outline"
+                            className={cn("text-[10px] uppercase", signal.className)}
                           >
-                            Website <ExternalLink className="size-3" />
-                          </a>
+                            {signal.label}
+                          </Badge>
+                          {p.siteCms ? (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {p.siteCms}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        {p.siteTitle ? (
+                          <p className="line-clamp-1 text-sm text-foreground/90">
+                            {p.siteTitle}
+                          </p>
                         ) : null}
-                        {p.mapsUrl ? (
-                          <a
-                            href={p.mapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:underline"
-                          >
-                            Maps <ExternalLink className="size-3" />
-                          </a>
+                        {p.siteDescription ? (
+                          <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                            {p.siteDescription}
+                          </p>
                         ) : null}
+                        {p.address ? (
+                          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                            <MapPin className="mt-0.5 size-3.5 shrink-0" />
+                            <span>{p.address}</span>
+                          </p>
+                        ) : null}
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                          {p.website ? (
+                            <a
+                              href={p.website}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-foreground underline-offset-4 hover:underline"
+                            >
+                              {host ?? "Website"}{" "}
+                              <ExternalLink className="size-3" />
+                            </a>
+                          ) : null}
+                          {p.mapsUrl ? (
+                            <a
+                              href={p.mapsUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:underline"
+                            >
+                              Maps <ExternalLink className="size-3" />
+                            </a>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={pending}
-                        onClick={() => onSkip(p.id)}
-                      >
-                        Skip
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={pending}
-                        onClick={() => onKeep(p.id)}
-                      >
-                        Keep
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </li>
-            ))}
+                      <div className="flex shrink-0 gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => onSkip(p.id)}
+                        >
+                          Skip
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => onKeep(p.id)}
+                        >
+                          Keep
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

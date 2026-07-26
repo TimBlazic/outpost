@@ -366,6 +366,7 @@ export function LeadDetail({
           <QualifyLeadButton
             leadId={lead.id}
             website={lead.website}
+            company={lead.company}
             onDone={afterMutation}
           />
           <GenerateEmailButton leadId={lead.id} leadEmail={lead.email} />

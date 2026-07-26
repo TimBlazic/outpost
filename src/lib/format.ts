@@ -33,6 +33,18 @@ export function fmtDateLong(d: string | null) {
   }).format(new Date(d));
 }
 
+export function fmtDateTime(d: string | null) {
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(d));
+}
+
 export function dueState(d: string): "overdue" | "today" | "soon" | "later" {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

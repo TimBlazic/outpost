@@ -17,10 +17,9 @@ import {
   type HuntKnownIndex,
 } from "./known";
 import { searchPlaces } from "./places";
+import { fetchHuntPreviewsForWebsites } from "./preview";
 import * as repo from "./repo";
 import type { Prospect } from "./types";
-
-const DAILY = 5;
 
 function assertHuntReady() {
   if (!isSupabaseEnabled()) {
@@ -41,11 +40,11 @@ async function resolveKnownHit(
   }
 }
 
-async function resolveKnownQueued(
-  queued: Prospect[],
+async function resolveKnownActive(
+  active: Prospect[],
   index: HuntKnownIndex
 ): Promise<void> {
-  for (const p of queued) {
+  for (const p of active) {
     const hit = matchKnown(index, {
       placeId: p.placeId,
       name: p.name,
@@ -57,6 +56,7 @@ async function resolveKnownQueued(
   }
 }
 
+/** Search Places and put results straight into the review list (not a waiting pool). */
 export async function searchAndPool(query: string, city: string) {
   await requireStudioSession();
   assertHuntReady();
@@ -64,6 +64,7 @@ export async function searchAndPool(query: string, city: string) {
   const c = city.trim();
   if (!q || !c) throw new Error("Query and city are required");
 
+  const today = huntToday();
   const candidates = await searchPlaces(q, c);
   const leads = await getLeads();
   const index = buildHuntKnownIndex(leads, await repo.listTerminalPlaceIds());
@@ -82,44 +83,40 @@ export async function searchAndPool(query: string, city: string) {
     return true;
   });
 
-  const imported = await repo.upsertPooledCandidates(c, q, filtered);
-  await ensureTodayQueue();
+  const imported = await repo.upsertQueuedCandidates(c, q, filtered, today);
+
+  const previews = await fetchHuntPreviewsForWebsites(
+    filtered.map((f) => ({ placeId: f.placeId, website: f.website }))
+  );
+  await repo.updateSitePreviews(previews);
+
   revalidatePath("/hunt");
-  return { imported, skippedKnown, fetched: candidates.length };
+  return {
+    imported,
+    skippedKnown,
+    fetched: candidates.length,
+    previewed: previews.size,
+  };
 }
 
+export async function clearHuntReview() {
+  await requireStudioSession();
+  assertHuntReady();
+  const cleared = await repo.clearActiveReview();
+  revalidatePath("/hunt");
+  return { cleared };
+}
+
+/** Clean known hits from the active review list; return what remains. */
 export async function ensureTodayQueue(): Promise<Prospect[]> {
   await requireStudioSession();
   assertHuntReady();
-  const today = huntToday();
   const leads = await getLeads();
   const index = buildHuntKnownIndex(leads, await repo.listTerminalPlaceIds());
 
-  let queued = await repo.listQueuedOn(today);
-  await resolveKnownQueued(queued, index);
-  queued = await repo.listQueuedOn(today);
-
-  if (queued.length >= DAILY) return queued;
-
-  const need = DAILY - queued.length;
-  const pooled = await repo.listByStatus("pooled");
-  const pick: string[] = [];
-  for (const p of pooled) {
-    if (pick.length >= need) break;
-    const hit = matchKnown(index, {
-      placeId: p.placeId,
-      name: p.name,
-      city: p.city,
-      website: p.website,
-    });
-    if (hit) {
-      await resolveKnownHit(p.id, hit);
-      continue;
-    }
-    pick.push(p.id);
-  }
-  await repo.queueProspects(pick, today);
-  return repo.listQueuedOn(today);
+  let active = await repo.listActiveReview();
+  await resolveKnownActive(active, index);
+  return repo.listActiveReview();
 }
 
 export async function getHuntPageData() {
@@ -128,15 +125,14 @@ export async function getHuntPageData() {
     return {
       enabled: false as const,
       today: [] as Prospect[],
-      pooledCount: 0,
+      reviewCount: 0,
     };
   }
   const today = await ensureTodayQueue();
-  const pooled = await repo.listByStatus("pooled");
   return {
     enabled: true as const,
     today,
-    pooledCount: pooled.length,
+    reviewCount: today.length,
   };
 }
 

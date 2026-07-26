@@ -163,6 +163,7 @@ export async function createLead(input: LeadInput) {
     lastContact: null,
     notes: 0,
     createdBy: input.ownerId,
+    createdAt: new Date().toISOString(),
     qualifyScore: input.qualifyScore ?? null,
     qualifyRating: input.qualifyRating ?? null,
   };
@@ -190,36 +191,50 @@ export async function updateLead(id: string, input: LeadInput) {
 }
 
 export async function setLeadStatus(id: string, status: LeadStatus) {
-  const leads = await getLeads();
-  const current = leads.find((l) => l.id === id);
-  if (!current || current.status === status) return;
+  await bulkSetLeadStatus([id], status);
+}
 
+export async function bulkSetLeadStatus(ids: string[], status: LeadStatus) {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].slice(
+    0,
+    200
+  );
+  if (!unique.length) return { updated: 0 };
+
+  const leads = await getLeads();
+  const idSet = new Set(unique);
   const now = today();
   const me = await getCurrentUserId();
-  await saveLeads(
-    leads.map((l) =>
-      l.id === id
-        ? {
-            ...l,
-            status,
-            lastContact: now,
-            firstContact: l.firstContact ?? now,
-          }
-        : l
-    )
-  );
+  const changed: string[] = [];
+
+  const nextLeads = leads.map((l) => {
+    if (!idSet.has(l.id) || l.status === status) return l;
+    changed.push(l.id);
+    return {
+      ...l,
+      status,
+      lastContact: now,
+      firstContact: l.firstContact ?? now,
+    };
+  });
+
+  if (!changed.length) return { updated: 0 };
+
+  await saveLeads(nextLeads);
 
   const activities = await getActivities();
-  const activity: Activity = {
+  const newActivities: Activity[] = changed.map((leadId) => ({
     id: uid("a"),
-    leadId: id,
+    leadId,
     type: "status",
     title: `Status changed to ${status}`,
     date: now,
     userId: me,
-  };
-  await saveActivities([activity, ...activities]);
-  revalidateLead(id);
+  }));
+  await saveActivities([...newActivities, ...activities]);
+
+  for (const id of changed) revalidateLead(id);
+  return { updated: changed.length };
 }
 
 export async function setFollowUp(leadId: string, date: string | null) {
@@ -399,38 +414,58 @@ export async function searchAll(query: string) {
   };
 }
 
-export async function deleteLead(id: string) {
+async function removeLeadsByIds(ids: string[]) {
+  const idSet = new Set(ids);
+  if (!idSet.size) return;
+
   const leads = await getLeads();
-  await saveLeads(leads.filter((l) => l.id !== id));
+  await saveLeads(leads.filter((l) => !idSet.has(l.id)));
 
   const notes = await getNotes();
-  await saveNotes(notes.filter((n) => n.leadId !== id));
+  await saveNotes(notes.filter((n) => !idSet.has(n.leadId)));
 
   const activities = await getActivities();
-  await saveActivities(activities.filter((a) => a.leadId !== id));
+  await saveActivities(activities.filter((a) => !idSet.has(a.leadId)));
 
   const tasks = await getTasks();
-  await saveTasks(tasks.filter((t) => t.leadId !== id));
+  await saveTasks(tasks.filter((t) => !t.leadId || !idSet.has(t.leadId)));
 
   const attachments = await getAttachments();
   const removed = attachments.filter(
-    (a) => a.parentType === "lead" && a.parentId === id
+    (a) => a.parentType === "lead" && idSet.has(a.parentId)
   );
   await saveAttachments(
-    attachments.filter((a) => !(a.parentType === "lead" && a.parentId === id))
+    attachments.filter(
+      (a) => !(a.parentType === "lead" && idSet.has(a.parentId))
+    )
   );
   await cleanupAttachmentFiles(removed);
 
   const projects = await getProjects();
   await saveProjects(
-    projects.map((p) => (p.leadId === id ? { ...p, leadId: undefined } : p))
+    projects.map((p) =>
+      p.leadId && idSet.has(p.leadId) ? { ...p, leadId: undefined } : p
+    )
   );
 
   revalidatePath("/leads");
   revalidatePath("/tasks");
   revalidatePath("/projects");
   revalidatePath("/");
+}
+
+export async function deleteLead(id: string) {
+  await removeLeadsByIds([id]);
   redirect("/leads");
+}
+
+export async function bulkDeleteLeads(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].slice(
+    0,
+    200
+  );
+  await removeLeadsByIds(unique);
+  return { deleted: unique.length };
 }
 
 // ---- Notes ----------------------------------------------------------------

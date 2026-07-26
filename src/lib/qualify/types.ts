@@ -61,6 +61,10 @@ export type QualifyResult = {
     rating: QualifyRating;
     reasons: string[];
     notesMarkdown: string;
+    /** Short plain summary of what the company does. */
+    businessSummary: string;
+    /** Concrete services / offers to pitch (redesign, admin, newsletter…). */
+    offerIdeas: string[];
   };
   draft: { subject: string; body: string };
   suggested: {

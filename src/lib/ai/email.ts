@@ -245,7 +245,7 @@ export async function generateLeadEmail(input: {
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
     model: modelId(),
-    max_tokens: 1200,
+    max_tokens: 1600,
     system,
     messages: [
       {
