@@ -7,6 +7,7 @@ import { getLeadById, getLeads, saveLeads } from "@/lib/store";
 import { qualifyLead } from "./orchestrate";
 import { computeFitScore } from "./score";
 import type { QualifyRating } from "./types";
+import { clampSloveniaDealValue } from "./value";
 
 function statusForRating(
   rating: QualifyRating,
@@ -15,23 +16,6 @@ function statusForRating(
   if (rating === "go") return "Ready to contact";
   if (rating === "maybe") return "Researching";
   return current;
-}
-
-/** Keep deal values realistic for SI indie studio websites. */
-function clampSloveniaDealValue(
-  value: number,
-  category: Lead["category"]
-): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  const localish = [
-    "Local business",
-    "Restaurant",
-    "Healthcare",
-    "Real estate",
-  ].includes(category);
-  const max = localish ? 4500 : 8000;
-  const min = 800;
-  return Math.round(Math.min(max, Math.max(min, value)));
 }
 
 /** Session-free auto-apply — safe for cron / after(). */

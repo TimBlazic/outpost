@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+import { DEFAULT_AI_QUALIFY_PRICING_PROMPT } from "@/lib/ai/default-qualify-pricing";
 import { generateLeadEmail } from "@/lib/ai/email";
 import type { FirmSettings, Lead, LeadStatus } from "@/lib/data";
 import { leadCategories } from "@/lib/data";
@@ -10,6 +11,7 @@ import type {
   QualifyRating,
   QualifySiteResult,
 } from "./types";
+import { clampSloveniaDealValue } from "./value";
 
 function modelId() {
   return process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5";
@@ -38,6 +40,8 @@ export async function runQualifyVerdict(input: {
   companywall: QualifyCompanywallResult;
   leadContext?: string | null;
   hasWebsite?: boolean;
+  /** Studio pricing note from Settings (empty → app default). */
+  pricingGuidance?: string | null;
 }): Promise<{
   verdict: {
     rating: QualifyRating;
@@ -65,6 +69,8 @@ export async function runQualifyVerdict(input: {
   }
 
   const hasWebsite = input.hasWebsite ?? Boolean(input.website?.trim());
+  const pricingGuidance =
+    input.pricingGuidance?.trim() || DEFAULT_AI_QUALIFY_PRICING_PROMPT;
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
     model: modelId(),
@@ -88,13 +94,10 @@ Use company name + Companywall + any CRM context. Infer industry/services best-e
 offerIdeas MUST lean into: new marketing website, Google Business / presence, booking, newsletter, simple admin — not "redesign an existing site" unless evidence they have one.
 Still no-go if finances look dead, company looks dissolved, or it's clearly not a fit.`
 }
-Pricing (value) MUST be Slovenia-realistic for a solo studio — NOT US/EU agency rates:
-- Local business / restaurant / salon / clinic: typically 1200–3500 EUR (redesign or new marketing site)
-- Small SaaS / e-commerce / agency: typically 2500–6000 EUR
-- Never suggest above 8000 EUR unless clearly a multi-page web app (still cap mental model at ~8k)
-- Prefer round numbers like 1800, 2500, 3200
-Always set a realistic value when rating is go or maybe (not 0).
-Be honest: weak finances or a strong modern site → maybe/no-go.`,
+Pricing (value): use the studio pricing guidance below. Default to the SIMPLE/LOW band for typical local / brochure sites. Only price mid/high when evidence clearly needs custom features. Slovenia solo studio — NOT agency rates. If unsure, pick the LOWER number. Be honest: weak finances or a strong modern site → maybe/no-go.
+
+Studio pricing guidance:
+${pricingGuidance}`,
     messages: [
       {
         role: "user",
@@ -181,25 +184,13 @@ Be honest: weak finances or a strong modern site → maybe/no-go.`,
         phoneFromSite,
       country: String(data.country ?? "").trim() || "Slovenia",
       category,
-      value: clampSlValue(
+      value: clampSloveniaDealValue(
         Number.isFinite(Number(data.value)) ? Number(data.value) : 0,
         category
       ),
       status: statusForRating(rating),
     },
   };
-}
-
-function clampSlValue(value: number, category: Lead["category"]): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  const localish = [
-    "Local business",
-    "Restaurant",
-    "Healthcare",
-    "Real estate",
-  ].includes(category);
-  const max = localish ? 4500 : 8000;
-  return Math.round(Math.min(max, Math.max(800, value)));
 }
 
 export async function runQualifyDraft(input: {

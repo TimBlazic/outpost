@@ -23,6 +23,8 @@ export function QualifyLeadButton({
   const router = useRouter();
   const queue = useQualifyQueue();
   const handledSeq = useRef(0);
+  const refreshedForSeq = useRef(0);
+  const wasQueuedRef = useRef(false);
   const canQualify =
     Boolean(website?.trim()) || Boolean(company?.trim());
   const [serverQueued, setServerQueued] = useState(false);
@@ -57,12 +59,18 @@ export function QualifyLeadButton({
     // Enqueue ack — wait for server job to finish via serverQueued poll.
   }, [queue.lastCompleted, leadId]);
 
+  // Refresh once when this lead leaves the queue (not on every render).
   useEffect(() => {
-    if (!serverQueued && handledSeq.current > 0) {
-      if (onDone) onDone();
-      else router.refresh();
-    }
-  }, [serverQueued, onDone, router]);
+    const queued = inQueue;
+    const was = wasQueuedRef.current;
+    wasQueuedRef.current = queued;
+    if (!was || queued) return;
+    if (handledSeq.current <= 0) return;
+    if (refreshedForSeq.current >= handledSeq.current) return;
+    refreshedForSeq.current = handledSeq.current;
+    if (onDone) onDone();
+    else router.refresh();
+  }, [inQueue, onDone, router]);
 
   const label = !canQualify
     ? "Need company"

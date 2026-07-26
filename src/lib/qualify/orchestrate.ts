@@ -102,6 +102,7 @@ export async function qualifyLead(input: {
     companywall,
     leadContext: input.leadContext ?? null,
     hasWebsite: Boolean(website),
+    pricingGuidance: settings.aiQualifyPricingPrompt,
   });
 
   const description = compileResearchMarkdown({
@@ -180,6 +181,7 @@ export async function requalifyWithCompanywall(input: {
     lighthouse: previous.lighthouse,
     companywall,
     hasWebsite: Boolean(previous.website.trim()),
+    pricingGuidance: settings.aiQualifyPricingPrompt,
   });
 
   const description = compileResearchMarkdown({

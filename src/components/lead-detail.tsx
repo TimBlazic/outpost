@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   ArrowLeft,
   Globe,
@@ -202,10 +202,10 @@ export function LeadDetail({
   const site = websiteHref(lead.website);
   const drawer = mode === "drawer";
 
-  function afterMutation() {
+  const afterMutation = useCallback(() => {
     router.refresh();
     onChanged?.();
-  }
+  }, [router, onChanged]);
 
   const body = (
     <>

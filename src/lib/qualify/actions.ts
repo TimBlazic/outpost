@@ -18,6 +18,7 @@ import {
   isLeadQualifyQueued,
 } from "./jobs";
 import { qualifyLead, requalifyWithCompanywall } from "./orchestrate";
+import { bulkRepriceLeads } from "./reprice";
 import type { QualifyRating, QualifyResult } from "./types";
 import { runQualifyDraft } from "./verdict";
 
@@ -151,6 +152,16 @@ export async function bulkEnqueueUnscoredLeadsAction() {
 export async function bulkEnqueueSelectedLeadsAction(leadIds: string[]) {
   await requireStudioSession();
   return bulkEnqueueSelectedLeads(leadIds);
+}
+
+/** AI reprice deal value only (uses Settings pricing guidance). Max 40. */
+export async function bulkRepriceSelectedLeadsAction(leadIds: string[]) {
+  await requireStudioSession();
+  const ids = [...new Set(leadIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length > 40) {
+    throw new Error("Select at most 40 leads to reprice at once");
+  }
+  return bulkRepriceLeads(ids);
 }
 
 export async function getQualifyJobCountsAction() {

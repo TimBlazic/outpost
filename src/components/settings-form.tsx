@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import type { FirmSettings } from "@/lib/data";
 import { DEFAULT_AI_EMAIL_SYSTEM_PROMPT } from "@/lib/ai/default-email-prompt";
+import { DEFAULT_AI_QUALIFY_PRICING_PROMPT } from "@/lib/ai/default-qualify-pricing";
 import { updateFirmSettings } from "@/lib/actions";
 import {
   clearInvoiceSignature,
@@ -61,6 +62,9 @@ export function SettingsForm({
   const [aiEmailSystemPrompt, setAiEmailSystemPrompt] = useState(
     settings.aiEmailSystemPrompt || DEFAULT_AI_EMAIL_SYSTEM_PROMPT
   );
+  const [aiQualifyPricingPrompt, setAiQualifyPricingPrompt] = useState(
+    settings.aiQualifyPricingPrompt || DEFAULT_AI_QUALIFY_PRICING_PROMPT
+  );
   const [outboundFromName, setOutboundFromName] = useState(
     settings.outboundFromName
   );
@@ -99,6 +103,11 @@ export function SettingsForm({
         aiEmailSystemPrompt.trim() === DEFAULT_AI_EMAIL_SYSTEM_PROMPT.trim()
           ? ""
           : aiEmailSystemPrompt;
+      next.aiQualifyPricingPrompt =
+        aiQualifyPricingPrompt.trim() ===
+        DEFAULT_AI_QUALIFY_PRICING_PROMPT.trim()
+          ? ""
+          : aiQualifyPricingPrompt;
     }
     if (section === "email") {
       next.outboundFromName = outboundFromName.trim() || "Tim";
@@ -436,48 +445,79 @@ export function SettingsForm({
       ) : null}
 
       {section === "ai" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">AI email prompt</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              System prompt for Generate email on leads. Lead data, intent, and
-              your brief are injected automatically. Uses Claude Sonnet via{" "}
-              <code className="text-xs">ANTHROPIC_API_KEY</code>.
-            </p>
-            <div>
-              <Label htmlFor="aiEmailSystemPrompt" className="mb-1.5">
-                System prompt
-              </Label>
-              <Textarea
-                id="aiEmailSystemPrompt"
-                value={aiEmailSystemPrompt}
-                onChange={(e) => setAiEmailSystemPrompt(e.target.value)}
-                rows={18}
-                className="font-mono text-xs leading-relaxed"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" disabled={pending}>
-                {pending ? "Saving…" : "Save prompt"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={pending}
-                onClick={() =>
-                  setAiEmailSystemPrompt(DEFAULT_AI_EMAIL_SYSTEM_PROMPT)
-                }
-              >
-                Reset to default
-              </Button>
-              {saved && (
-                <span className="text-sm text-emerald-600">Saved</span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">AI email prompt</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                System prompt for Generate email on leads. Lead data, intent,
+                and your brief are injected automatically. Uses Claude Sonnet
+                via <code className="text-xs">ANTHROPIC_API_KEY</code>.
+              </p>
+              <div>
+                <Label htmlFor="aiEmailSystemPrompt" className="mb-1.5">
+                  System prompt
+                </Label>
+                <Textarea
+                  id="aiEmailSystemPrompt"
+                  value={aiEmailSystemPrompt}
+                  onChange={(e) => setAiEmailSystemPrompt(e.target.value)}
+                  rows={18}
+                  className="font-mono text-xs leading-relaxed"
+                />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Qualify pricing guidance
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Guides AI deal value estimates on Qualify. Scale by site
+                complexity; keep Slovenia / solo studio rates. Tweak anytime
+                if values feel too high or low.
+              </p>
+              <div>
+                <Label htmlFor="aiQualifyPricingPrompt" className="mb-1.5">
+                  Pricing note
+                </Label>
+                <Textarea
+                  id="aiQualifyPricingPrompt"
+                  value={aiQualifyPricingPrompt}
+                  onChange={(e) => setAiQualifyPricingPrompt(e.target.value)}
+                  rows={10}
+                  className="font-mono text-xs leading-relaxed"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" disabled={pending}>
+                  {pending ? "Saving…" : "Save AI settings"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => {
+                    setAiEmailSystemPrompt(DEFAULT_AI_EMAIL_SYSTEM_PROMPT);
+                    setAiQualifyPricingPrompt(
+                      DEFAULT_AI_QUALIFY_PRICING_PROMPT
+                    );
+                  }}
+                >
+                  Reset both to default
+                </Button>
+                {saved && (
+                  <span className="text-sm text-emerald-600">Saved</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </>
       ) : null}
 
       {section === "email" ? (

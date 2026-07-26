@@ -948,6 +948,7 @@ export async function getFirmSettings(): Promise<FirmSettings> {
         defaultFirmSettings.defaultPaymentTermsDays
     ),
     aiEmailSystemPrompt: (data.ai_email_system_prompt as string) ?? "",
+    aiQualifyPricingPrompt: (data.ai_qualify_pricing_prompt as string) ?? "",
     outboundFromName: (data.outbound_from_name as string) ?? "",
     outboundFromEmail: (data.outbound_from_email as string) ?? "",
   });
@@ -982,6 +983,7 @@ export async function saveFirmSettings(settings: FirmSettings) {
     default_currency: s.defaultCurrency,
     default_payment_terms_days: s.defaultPaymentTermsDays,
     ai_email_system_prompt: s.aiEmailSystemPrompt,
+    ai_qualify_pricing_prompt: s.aiQualifyPricingPrompt,
     outbound_from_name: s.outboundFromName,
     outbound_from_email: s.outboundFromEmail,
     updated_at: new Date().toISOString(),

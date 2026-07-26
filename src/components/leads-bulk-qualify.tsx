@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Banknote, Sparkles } from "lucide-react";
 
 import {
   bulkDeleteLeads,
@@ -12,6 +12,7 @@ import { leadStatuses, type LeadStatus } from "@/lib/data";
 import {
   bulkEnqueueSelectedLeadsAction,
   bulkEnqueueUnscoredLeadsAction,
+  bulkRepriceSelectedLeadsAction,
   getQualifyJobCountsAction,
 } from "@/lib/qualify/actions";
 import { ConfirmDelete } from "@/components/confirm-delete";
@@ -95,6 +96,25 @@ export function LeadsBulkQualifyBar({
     });
   }
 
+  function runReprice() {
+    if (!selectedIds.length) return;
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const res = await bulkRepriceSelectedLeadsAction(selectedIds);
+        setMessage(
+          `Repriced ${res.updated}` +
+            (res.skipped ? ` · skipped ${res.skipped}` : "") +
+            (res.failed ? ` · failed ${res.failed}` : "")
+        );
+        onClearSelection();
+        router.refresh();
+      } catch (e) {
+        setMessage(e instanceof Error ? e.message : "Bulk reprice failed");
+      }
+    });
+  }
+
   function applyStatus(status: LeadStatus) {
     if (!selectedIds.length) return;
     setMessage(null);
@@ -155,6 +175,19 @@ export function LeadsBulkQualifyBar({
             onClick={runSelected}
           >
             Qualify selected ({selectedIds.length})
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8"
+            disabled={pending}
+            onClick={runReprice}
+            title="AI reprice deal value only (Settings pricing guidance)"
+          >
+            <Banknote className="size-3.5" />
+            Reprice ({selectedIds.length})
           </Button>
 
           <Button

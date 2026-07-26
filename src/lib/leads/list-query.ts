@@ -50,12 +50,13 @@ const STATUS_INDEX = new Map(
 export function parseLeadListQuery(
   params: URLSearchParams | { get(name: string): string | null }
 ): LeadListQuery {
+  const sort = parseSort(params.get("sort"));
   return {
     status: parseStatus(params.get("status")),
     sources: parseSources(params.get("source")),
     q: (params.get("q") ?? "").trim(),
-    sort: parseSort(params.get("sort")),
-    dir: parseDir(params.get("dir")),
+    sort,
+    dir: parseDir(params.get("dir"), sort),
   };
 }
 
@@ -89,11 +90,14 @@ function parseSort(raw: string | null): LeadSortKey {
   if (raw && (SORT_KEYS as readonly string[]).includes(raw)) {
     return raw as LeadSortKey;
   }
-  return "followUp";
+  return "added";
 }
 
-function parseDir(raw: string | null): LeadSortDir {
-  return raw === "desc" ? "desc" : "asc";
+function parseDir(raw: string | null, sort: LeadSortKey): LeadSortDir {
+  if (raw === "desc" || raw === "asc") return raw;
+  return sort === "company" || sort === "status" || sort === "followUp"
+    ? "asc"
+    : "desc";
 }
 
 /** Build params to write; omits defaults where helpful. */
@@ -123,9 +127,10 @@ export function leadListQueryToSearchParams(
   }
   if (query.q) next.set("q", query.q);
 
-  if (query.sort !== "followUp") next.set("sort", query.sort);
-  else next.set("sort", "followUp");
-  next.set("dir", query.dir);
+  if (query.sort !== "added") next.set("sort", query.sort);
+  if (!(query.sort === "added" && query.dir === "desc")) {
+    next.set("dir", query.dir);
+  }
 
   return next;
 }

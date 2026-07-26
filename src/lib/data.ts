@@ -1674,6 +1674,8 @@ export type FirmSettings = {
   defaultPaymentTermsDays: number;
   /** Editable system prompt for AI lead emails. Empty → app default. */
   aiEmailSystemPrompt: string;
+  /** Editable pricing guidance for AI lead qualify. Empty → app default. */
+  aiQualifyPricingPrompt: string;
   /** Resend From display name */
   outboundFromName: string;
   /** Resend From email (must be on a verified domain) */
@@ -1712,6 +1714,7 @@ export const defaultFirmSettings: FirmSettings = {
   defaultCurrency: "EUR",
   defaultPaymentTermsDays: 14,
   aiEmailSystemPrompt: "",
+  aiQualifyPricingPrompt: "",
   outboundFromName: "Tim",
   outboundFromEmail: "tim@timblazic.dev",
 };
@@ -1726,6 +1729,7 @@ export function normalizeFirmSettings(s: FirmSettings): FirmSettings {
     defaultCurrency: s.defaultCurrency ?? "EUR",
     defaultPaymentTermsDays: s.defaultPaymentTermsDays ?? 14,
     aiEmailSystemPrompt: s.aiEmailSystemPrompt ?? "",
+    aiQualifyPricingPrompt: s.aiQualifyPricingPrompt ?? "",
     outboundFromName:
       s.outboundFromName?.trim() || defaultFirmSettings.outboundFromName,
     outboundFromEmail:

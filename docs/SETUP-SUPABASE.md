@@ -55,8 +55,9 @@ In Supabase SQL Editor, run in order:
 22. `supabase/migrations/20260725320000_client_portal_locale.sql` (portal language on client account)
 23. `supabase/migrations/20260726200000_portal_notification_events.sql` (client email notification queue)
 24. `supabase/migrations/20260726210000_lead_qualify_jobs.sql` (durable lead qualify queue)
-25. `supabase/seed.sql` (optional)
-26. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
+25. `supabase/migrations/20260726240000_ai_qualify_pricing_prompt.sql` (Settings qualify pricing guidance)
+26. `supabase/seed.sql` (optional)
+27. `supabase/seed-odobreni-leadi.sql` (optional — 35 SI website-redesign leads)
 
 For portal notification emails + lead qualify cron, also set:
 
