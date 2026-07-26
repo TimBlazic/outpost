@@ -173,7 +173,7 @@ export async function keepProspect(id: string) {
     phone: "",
     country: "Slovenia",
     category: "Local business",
-    source: "Website",
+    source: "Cold email",
     ownerId: me.id,
     status: "New",
     value: 0,

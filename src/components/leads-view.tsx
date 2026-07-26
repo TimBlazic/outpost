@@ -130,7 +130,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
   );
 
   const { pageRows, page, setPage, pageCount, from, to, total } =
-    useClientPagination(leads, undefined, resetKey);
+    useClientPagination(leads, 50, resetKey);
 
   const selectedLead =
     allLeads.find((l) => l.id === selectedId) ??

@@ -198,10 +198,7 @@ export function LeadForm({
               </Select>
             </Field>
             <Field label="Source" htmlFor="source">
-              <Select id="source" defaultValue={lead?.source ?? ""}>
-                <option value="" disabled>
-                  Select…
-                </option>
+              <Select id="source" defaultValue={lead?.source ?? "Cold email"}>
                 {leadSources.map((s) => (
                   <option key={s} value={s}>
                     {s}
