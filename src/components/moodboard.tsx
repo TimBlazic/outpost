@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MoodboardPin } from "@/lib/moodboard";
 import { moodboardImageSrc } from "@/lib/moodboard";
 import { cn } from "@/lib/utils";
+
+function columnCountForWidth(width: number) {
+  if (width >= 1280) return 6;
+  if (width >= 1024) return 5;
+  if (width >= 768) return 4;
+  if (width >= 640) return 3;
+  return 2;
+}
 
 function MoodboardPinCard({
   pin,
@@ -22,16 +30,14 @@ function MoodboardPinCard({
 
   return (
     <figure
-      className="moodboard-pin mb-3 break-inside-avoid"
+      className="moodboard-pin mb-3 w-full"
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <button
         type="button"
         aria-pressed={flipped}
         aria-label={
-          flipped
-            ? `Hide note: ${pin.title}`
-            : `Show note: ${pin.title}`
+          flipped ? `Hide note: ${pin.title}` : `Show note: ${pin.title}`
         }
         onClick={() => setFlipped((v) => !v)}
         className="moodboard-flip group relative block w-full cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -76,16 +82,56 @@ function MoodboardPinCard({
   );
 }
 
+/**
+ * Flex-column masonry instead of CSS multi-column.
+ * WKWebView (Tauri) mis-places `columns-*` into a staircase and paints
+ * transformed pins over the sticky header.
+ */
 export function Moodboard({ pins }: { pins: MoodboardPin[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [columnCount, setColumnCount] = useState(2);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => {
+      setColumnCount(columnCountForWidth(el.clientWidth));
+    };
+    update();
+
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const columns = useMemo(() => {
+    const cols: MoodboardPin[][] = Array.from(
+      { length: columnCount },
+      () => []
+    );
+    pins.forEach((pin, i) => {
+      cols[i % columnCount]!.push(pin);
+    });
+    return cols;
+  }, [pins, columnCount]);
+
   return (
-    <div className="columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6">
-      {pins.map((pin, i) => (
-        <MoodboardPinCard
-          key={pin.id}
-          pin={pin}
-          priority={i < 6}
-          delayMs={Math.min(i, 12) * 40}
-        />
+    <div ref={containerRef} className="flex items-start gap-3">
+      {columns.map((col, colIndex) => (
+        <div key={colIndex} className="min-w-0 flex-1">
+          {col.map((pin, i) => {
+            const globalIndex = colIndex + i * columnCount;
+            return (
+              <MoodboardPinCard
+                key={pin.id}
+                pin={pin}
+                priority={globalIndex < 6}
+                delayMs={Math.min(globalIndex, 12) * 40}
+              />
+            );
+          })}
+        </div>
       ))}
     </div>
   );
