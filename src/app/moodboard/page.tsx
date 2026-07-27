@@ -4,8 +4,8 @@ import { MOODBOARD_PINS } from "@/lib/moodboard";
 export default function MoodboardPage() {
   return (
     <div className="px-3 pb-6 sm:px-4 lg:px-5">
-      <header className="sticky top-0 z-30 -mx-3 mb-5 isolate border-b border-border/60 bg-background/95 px-3 pt-4 pb-4 backdrop-blur-md sm:-mx-4 sm:px-4 lg:-mx-5 lg:px-5">
-        <div className="max-w-lg px-1">
+      <header className="mb-5 border-b border-border/60 px-1 pb-4 pt-4">
+        <div className="max-w-lg">
           <p className="text-[10px] tracking-[0.22em] uppercase text-muted-foreground">
             Personal
           </p>

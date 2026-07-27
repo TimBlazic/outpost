@@ -6,6 +6,9 @@ import type { MoodboardPin } from "@/lib/moodboard";
 import { moodboardImageSrc } from "@/lib/moodboard";
 import { cn } from "@/lib/utils";
 
+const GAP_PX = 12;
+const FALLBACK_HEIGHT = 260;
+
 function columnCountForWidth(width: number) {
   if (width >= 1280) return 6;
   if (width >= 1024) return 5;
@@ -14,14 +17,29 @@ function columnCountForWidth(width: number) {
   return 2;
 }
 
+function useIsTauriShell() {
+  const [tauri, setTauri] = useState(false);
+  useEffect(() => {
+    setTauri(
+      typeof window !== "undefined" &&
+        ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)
+    );
+  }, []);
+  return tauri;
+}
+
 function MoodboardPinCard({
   pin,
   priority,
   delayMs,
+  onHeight,
+  className,
 }: {
   pin: MoodboardPin;
   priority: boolean;
   delayMs: number;
+  onHeight?: (id: string, height: number) => void;
+  className?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const [flipped, setFlipped] = useState(false);
@@ -30,7 +48,7 @@ function MoodboardPinCard({
 
   return (
     <figure
-      className="moodboard-pin mb-3 w-full"
+      className={cn("moodboard-pin mb-3 w-full", className)}
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <button
@@ -54,8 +72,16 @@ function MoodboardPinCard({
               alt={pin.alt}
               loading={priority ? "eager" : "lazy"}
               decoding="async"
-              onError={() => setFailed(true)}
-              className="w-full rounded-2xl object-cover shadow-[0_1px_0_rgb(0_0_0_/6%)] ring-1 ring-border/40 transition-[filter] duration-300 group-hover:brightness-[0.97]"
+              onLoad={(e) => {
+                if (!onHeight) return;
+                const h = e.currentTarget.getBoundingClientRect().height;
+                if (h > 0) onHeight(pin.id, h + GAP_PX);
+              }}
+              onError={() => {
+                setFailed(true);
+                onHeight?.(pin.id, 0);
+              }}
+              className="block w-full rounded-2xl object-cover shadow-[0_1px_0_rgb(0_0_0_/6%)] ring-1 ring-border/40 transition-[filter] duration-300 group-hover:brightness-[0.97]"
             />
           </span>
           <span
@@ -82,39 +108,51 @@ function MoodboardPinCard({
   );
 }
 
-/**
- * Flex-column masonry instead of CSS multi-column.
- * WKWebView (Tauri) mis-places `columns-*` into a staircase and paints
- * transformed pins over the sticky header.
- */
-export function Moodboard({ pins }: { pins: MoodboardPin[] }) {
+/** Height-balanced flex columns — used in Tauri WKWebView where CSS columns break. */
+function FlexMasonry({ pins }: { pins: MoodboardPin[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(2);
+  const [heights, setHeights] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-
-    const update = () => {
-      setColumnCount(columnCountForWidth(el.clientWidth));
-    };
+    const update = () => setColumnCount(columnCountForWidth(el.clientWidth));
     update();
-
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  const onHeight = (id: string, height: number) => {
+    setHeights((prev) => {
+      if (prev[id] === height) return prev;
+      return { ...prev, [id]: height };
+    });
+  };
 
   const columns = useMemo(() => {
     const cols: MoodboardPin[][] = Array.from(
       { length: columnCount },
       () => []
     );
-    pins.forEach((pin, i) => {
-      cols[i % columnCount]!.push(pin);
-    });
+    const colHeights = Array.from({ length: columnCount }, () => 0);
+
+    for (const pin of pins) {
+      let shortest = 0;
+      for (let i = 1; i < columnCount; i++) {
+        if (colHeights[i]! < colHeights[shortest]!) shortest = i;
+      }
+      cols[shortest]!.push(pin);
+      const h = heights[pin.id];
+      if (h === 0) {
+        /* failed image — no height */
+      } else {
+        colHeights[shortest]! += h ?? FALLBACK_HEIGHT;
+      }
+    }
     return cols;
-  }, [pins, columnCount]);
+  }, [pins, columnCount, heights]);
 
   return (
     <div ref={containerRef} className="flex items-start gap-3">
@@ -126,8 +164,9 @@ export function Moodboard({ pins }: { pins: MoodboardPin[] }) {
               <MoodboardPinCard
                 key={pin.id}
                 pin={pin}
-                priority={globalIndex < 6}
+                priority={globalIndex < 8}
                 delayMs={Math.min(globalIndex, 12) * 40}
+                onHeight={onHeight}
               />
             );
           })}
@@ -135,4 +174,27 @@ export function Moodboard({ pins }: { pins: MoodboardPin[] }) {
       ))}
     </div>
   );
+}
+
+/** CSS multi-column — best look in Chromium / Safari browser. */
+function CssColumnMasonry({ pins }: { pins: MoodboardPin[] }) {
+  return (
+    <div className="moodboard-columns columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6">
+      {pins.map((pin, i) => (
+        <MoodboardPinCard
+          key={pin.id}
+          pin={pin}
+          priority={i < 6}
+          delayMs={Math.min(i, 12) * 40}
+          className="break-inside-avoid"
+        />
+      ))}
+    </div>
+  );
+}
+
+export function Moodboard({ pins }: { pins: MoodboardPin[] }) {
+  const tauri = useIsTauriShell();
+  if (tauri) return <FlexMasonry pins={pins} />;
+  return <CssColumnMasonry pins={pins} />;
 }

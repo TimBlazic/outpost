@@ -212,8 +212,17 @@
 }
 
 .moodboard-pin {
-  /* Opacity-only — transform animations break sticky stacking in WKWebView */
+  /* Opacity-only — transform on enter breaks column layout / sticky in WKWebView */
   animation: moodboard-pin-in 0.45s ease both;
+  display: inline-block;
+  width: 100%;
+  -webkit-column-break-inside: avoid;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.moodboard-columns {
+  column-fill: balance;
 }
 
 .moodboard-flip {
