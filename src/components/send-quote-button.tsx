@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, Mail, Sparkles, X } from "lucide-react";
 
@@ -50,6 +51,11 @@ function QuoteEmailDrawer({
   error: string | null;
 }) {
   const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -63,28 +69,31 @@ function QuoteEmailDrawer({
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const busy = pending || generating;
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+  // Portal to body — SidePanel uses transform, which traps position:fixed.
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex justify-end">
       <div
         className={cn(
-          "absolute inset-0 bg-black/30 backdrop-blur-[2px] transition-opacity duration-200",
+          "absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200",
           visible ? "opacity-100" : "opacity-0"
         )}
         onClick={onClose}
       />
       <div
         className={cn(
-          "relative z-10 m-3 flex h-[calc(100vh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl transition-transform duration-300 ease-out",
+          "relative z-10 m-3 flex h-[calc(100dvh-1.5rem)] max-h-[calc(100vh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl transition-transform duration-300 ease-out",
           visible ? "translate-x-0" : "translate-x-full"
         )}
       >
@@ -224,7 +233,8 @@ function QuoteEmailDrawer({
           </Button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

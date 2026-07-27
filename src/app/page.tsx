@@ -116,9 +116,15 @@ export default async function DashboardPage({
   const newLeads = periodLeads.filter((l) =>
     ["New", "Researching", "Ready to contact"].includes(l.status)
   ).length;
-  const proposals = periodLeads.filter((l) =>
+  const proposalLeads = periodLeads.filter((l) =>
     ["Proposal sent", "Negotiating", "Won"].includes(l.status)
-  ).length;
+  );
+  const proposals = proposalLeads.length;
+  const pricedProposals = proposalLeads.filter((l) => l.value > 0);
+  const proposalTotal = pricedProposals.reduce((s, l) => s + l.value, 0);
+  const proposalAvg = pricedProposals.length
+    ? Math.round(proposalTotal / pricedProposals.length)
+    : 0;
   const won = periodLeads.filter((l) => l.status === "Won").length;
   const lost = periodLeads.filter((l) => l.status === "Lost").length;
   const qualifiedGoLeads = periodLeads.filter((l) => l.qualifyRating === "go");
@@ -218,6 +224,11 @@ export default async function DashboardPage({
         <StatCard
           label="Proposals sent"
           value={String(proposals)}
+          sub={
+            pricedProposals.length
+              ? `avg ${eur(proposalAvg)} · total ${eur(proposalTotal)}`
+              : "avg — · total —"
+          }
           icon={Send}
         />
         <StatCard

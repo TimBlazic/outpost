@@ -6,6 +6,12 @@ export type MoodboardPin = {
   description: string;
 };
 
+/** Same-origin proxy so desktop WKWebView can load pinimg assets. */
+export function moodboardImageSrc(src: string) {
+  if (!src.startsWith("https://i.pinimg.com/")) return src;
+  return `/api/moodboard/image?url=${encodeURIComponent(src)}`;
+}
+
 /** Pins from https://www.pinterest.com/timblazic/dream-aesthetic/ (frontend-only). */
 export const MOODBOARD_PINS: MoodboardPin[] = [
   {

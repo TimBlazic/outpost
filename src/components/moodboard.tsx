@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import type { MoodboardPin } from "@/lib/moodboard";
+import { moodboardImageSrc } from "@/lib/moodboard";
 import { cn } from "@/lib/utils";
 
 function MoodboardPinCard({
@@ -16,6 +17,7 @@ function MoodboardPinCard({
 }) {
   const [failed, setFailed] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  const src = moodboardImageSrc(pin.src);
   if (failed) return null;
 
   return (
@@ -42,7 +44,7 @@ function MoodboardPinCard({
         >
           <span className="moodboard-flip-face moodboard-flip-front block w-full">
             <img
-              src={pin.src}
+              src={src}
               alt={pin.alt}
               loading={priority ? "eager" : "lazy"}
               decoding="async"
@@ -56,7 +58,7 @@ function MoodboardPinCard({
           >
             <span
               className="pointer-events-none absolute inset-0 bg-cover bg-center"
-              style={{ backgroundImage: `url(${pin.src})` }}
+              style={{ backgroundImage: `url(${src})` }}
             />
             <span className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/88 via-black/55 to-black/25" />
             <span className="relative z-10">

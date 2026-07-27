@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "import:harvey-invoices": "node scripts/import-harvey-invoices.mjs",
-    "migrate:website-to-cold-email": "node scripts/migrate-website-source-to-cold-email.mjs"
+    "migrate:website-to-cold-email": "node scripts/migrate-website-source-to-cold-email.mjs",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:build": "npm --prefix desktop run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
