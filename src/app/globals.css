@@ -212,8 +212,7 @@
 }
 
 .moodboard-pin {
-  /* Opacity-only — transform on enter breaks column layout / sticky in WKWebView */
-  animation: moodboard-pin-in 0.45s ease both;
+  /* No enter animation — staggered opacity caused hide/show flicker while images load */
   display: inline-block;
   width: 100%;
   -webkit-column-break-inside: avoid;

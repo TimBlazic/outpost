@@ -52,18 +52,7 @@ const nav = [
   { href: "/moodboard", label: "Moodboard", icon: Images },
 ];
 
-function SidebarNav({
-  user,
-  collapsed,
-  onToggle,
-  studioTheme,
-}: {
-  user: Member;
-  collapsed: boolean;
-  onToggle: () => void;
-  studioTheme: StudioTheme;
-}) {
-  const pathname = usePathname();
+function useMessagesUnread() {
   const [messagesUnread, setMessagesUnread] = useState(0);
 
   useEffect(() => {
@@ -90,7 +79,24 @@ function SidebarNav({
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [pathname]);
+  }, []);
+
+  return messagesUnread;
+}
+
+function SidebarNav({
+  user,
+  collapsed,
+  onToggle,
+  studioTheme,
+}: {
+  user: Member;
+  collapsed: boolean;
+  onToggle: () => void;
+  studioTheme: StudioTheme;
+}) {
+  const pathname = usePathname();
+  const messagesUnread = useMessagesUnread();
 
   return (
     <aside

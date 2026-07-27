@@ -9,7 +9,8 @@ import type {
 export const CLIENT_ONLINE_MS = 45_000;
 export const CHAT_POLL_MS = 2_000;
 /** How often unread badges / thread list refresh while a page is open. */
-export const UNREAD_POLL_MS = 2_000;
+/** Studio sidebar badge — keep light so navigations stay snappy. */
+export const UNREAD_POLL_MS = 15_000;
 
 export type ChatSyncPayload = {
   revision: string;

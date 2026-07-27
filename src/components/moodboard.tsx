@@ -31,26 +31,22 @@ function useIsTauriShell() {
 function MoodboardPinCard({
   pin,
   priority,
-  delayMs,
+  proxy,
   onHeight,
   className,
 }: {
   pin: MoodboardPin;
   priority: boolean;
-  delayMs: number;
+  proxy: boolean;
   onHeight?: (id: string, height: number) => void;
   className?: string;
 }) {
-  const [failed, setFailed] = useState(false);
   const [flipped, setFlipped] = useState(false);
-  const src = moodboardImageSrc(pin.src);
-  if (failed) return null;
+  const [src, setSrc] = useState(() => moodboardImageSrc(pin.src, { proxy }));
+  const triedDirect = useRef(false);
 
   return (
-    <figure
-      className={cn("moodboard-pin mb-3 w-full", className)}
-      style={{ animationDelay: `${delayMs}ms` }}
-    >
+    <figure className={cn("moodboard-pin mb-3 w-full", className)}>
       <button
         type="button"
         aria-pressed={flipped}
@@ -72,13 +68,19 @@ function MoodboardPinCard({
               alt={pin.alt}
               loading={priority ? "eager" : "lazy"}
               decoding="async"
+              referrerPolicy="no-referrer"
               onLoad={(e) => {
                 if (!onHeight) return;
                 const h = e.currentTarget.getBoundingClientRect().height;
                 if (h > 0) onHeight(pin.id, h + GAP_PX);
               }}
               onError={() => {
-                setFailed(true);
+                // Proxy failed → fall back to direct CDN once (don't unmount).
+                if (proxy && !triedDirect.current) {
+                  triedDirect.current = true;
+                  setSrc(pin.src);
+                  return;
+                }
                 onHeight?.(pin.id, 0);
               }}
               className="block w-full rounded-2xl object-cover shadow-[0_1px_0_rgb(0_0_0_/6%)] ring-1 ring-border/40 transition-[filter] duration-300 group-hover:brightness-[0.97]"
@@ -109,7 +111,13 @@ function MoodboardPinCard({
 }
 
 /** Height-balanced flex columns — used in Tauri WKWebView where CSS columns break. */
-function FlexMasonry({ pins }: { pins: MoodboardPin[] }) {
+function FlexMasonry({
+  pins,
+  proxy,
+}: {
+  pins: MoodboardPin[];
+  proxy: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(2);
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -145,9 +153,7 @@ function FlexMasonry({ pins }: { pins: MoodboardPin[] }) {
       }
       cols[shortest]!.push(pin);
       const h = heights[pin.id];
-      if (h === 0) {
-        /* failed image — no height */
-      } else {
+      if (h !== 0) {
         colHeights[shortest]! += h ?? FALLBACK_HEIGHT;
       }
     }
@@ -165,7 +171,7 @@ function FlexMasonry({ pins }: { pins: MoodboardPin[] }) {
                 key={pin.id}
                 pin={pin}
                 priority={globalIndex < 8}
-                delayMs={Math.min(globalIndex, 12) * 40}
+                proxy={proxy}
                 onHeight={onHeight}
               />
             );
@@ -177,15 +183,21 @@ function FlexMasonry({ pins }: { pins: MoodboardPin[] }) {
 }
 
 /** CSS multi-column — best look in Chromium / Safari browser. */
-function CssColumnMasonry({ pins }: { pins: MoodboardPin[] }) {
+function CssColumnMasonry({
+  pins,
+  proxy,
+}: {
+  pins: MoodboardPin[];
+  proxy: boolean;
+}) {
   return (
     <div className="moodboard-columns columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6">
       {pins.map((pin, i) => (
         <MoodboardPinCard
           key={pin.id}
           pin={pin}
-          priority={i < 6}
-          delayMs={Math.min(i, 12) * 40}
+          priority={i < 8}
+          proxy={proxy}
           className="break-inside-avoid"
         />
       ))}
@@ -195,6 +207,7 @@ function CssColumnMasonry({ pins }: { pins: MoodboardPin[] }) {
 
 export function Moodboard({ pins }: { pins: MoodboardPin[] }) {
   const tauri = useIsTauriShell();
-  if (tauri) return <FlexMasonry pins={pins} />;
-  return <CssColumnMasonry pins={pins} />;
+  const proxy = tauri;
+  if (tauri) return <FlexMasonry pins={pins} proxy={proxy} />;
+  return <CssColumnMasonry pins={pins} proxy={proxy} />;
 }

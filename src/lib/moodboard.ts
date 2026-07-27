@@ -6,8 +6,13 @@ export type MoodboardPin = {
   description: string;
 };
 
-/** Same-origin proxy so desktop WKWebView can load pinimg assets. */
-export function moodboardImageSrc(src: string) {
+/**
+ * Image URL for a pin.
+ * - Browser: direct pinimg (fast, CDN).
+ * - Tauri WKWebView: same-origin proxy (pinimg often blocked there).
+ */
+export function moodboardImageSrc(src: string, opts?: { proxy?: boolean }) {
+  if (!opts?.proxy) return src;
   if (!src.startsWith("https://i.pinimg.com/")) return src;
   return `/api/moodboard/image?url=${encodeURIComponent(src)}`;
 }
