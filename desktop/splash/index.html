@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Outpost</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f4f1ec;
+        --mute: rgba(244, 241, 236, 0.42);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+        background: #000;
+        color: var(--ink);
+        overflow: hidden;
+        font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+      }
+
+      main {
+        text-align: center;
+        animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+
+      .eyebrow {
+        font-size: 0.7rem;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--mute);
+        margin-bottom: 1.1rem;
+      }
+
+      h1 {
+        font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: clamp(3.75rem, 8vw, 5.5rem);
+        line-height: 0.92;
+        letter-spacing: -0.02em;
+      }
+
+      .rule {
+        width: 2.5rem;
+        height: 1px;
+        margin: 1.75rem auto 0;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(244, 241, 236, 0.55),
+          transparent
+        );
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 0.35;
+          transform: scaleX(0.85);
+        }
+        50% {
+          opacity: 1;
+          transform: scaleX(1);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Studio</p>
+      <h1>Outpost</h1>
+      <div class="rule" aria-hidden="true"></div>
+    </main>
+  </body>
+</html>

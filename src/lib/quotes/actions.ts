@@ -12,6 +12,7 @@ import {
   type QuoteLineItem,
   type QuoteStatus,
 } from "@/lib/data";
+import { eur } from "@/lib/format";
 import {
   getActivities,
   getFirmSettings,
@@ -87,6 +88,49 @@ function buildFields(input: QuoteInput) {
   };
 }
 
+/**
+ * When a quote is tied to a lead, keep lead pipeline value in sync with the
+ * quote total and log the change on the lead timeline.
+ */
+async function syncLeadValueFromQuote(opts: {
+  leadId: string | null;
+  quoteTotal: number;
+  quoteRef: string;
+}) {
+  const { leadId, quoteRef } = opts;
+  if (!leadId) return;
+  const nextValue = Math.round(opts.quoteTotal);
+  if (nextValue <= 0) return;
+
+  const leads = await getLeads();
+  const lead = leads.find((l) => l.id === leadId);
+  if (!lead) return;
+  if (Math.round(lead.value) === nextValue) return;
+
+  const previous = Math.round(lead.value);
+  await saveLeads(
+    leads.map((l) => (l.id === leadId ? { ...l, value: nextValue } : l))
+  );
+
+  const me = await getCurrentUserId();
+  const activities = await getActivities();
+  await saveActivities([
+    {
+      id: uid("a"),
+      leadId,
+      type: "note",
+      title: "Lead value updated from quote",
+      detail: `${previous > 0 ? eur(previous) : "—"} → ${eur(nextValue)} · ${quoteRef}`,
+      date: today(),
+      userId: me,
+    },
+    ...activities,
+  ]);
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/leads");
+  revalidatePath("/");
+}
+
 async function allocateQuoteNumber(): Promise<{
   number: string;
   year: number;
@@ -125,6 +169,11 @@ export async function createQuote(input: QuoteInput) {
     ...buildFields(input),
   });
   await saveQuotes([quote, ...quotes]);
+  await syncLeadValueFromQuote({
+    leadId: quote.leadId,
+    quoteTotal: quote.total,
+    quoteRef: quote.number ?? "Draft quote",
+  });
   revalidateQuotes(quote.id, quote.leadId);
   revalidatePath("/settings");
   return quote.id;
@@ -175,6 +224,11 @@ export async function updateQuote(id: string, input: QuoteInput) {
     updatedAt: new Date().toISOString(),
   });
   await saveQuotes(quotes.map((q) => (q.id === id ? next : q)));
+  await syncLeadValueFromQuote({
+    leadId: next.leadId,
+    quoteTotal: next.total,
+    quoteRef: next.number ?? "Draft quote",
+  });
   revalidateQuotes(id, next.leadId);
   if (allocated) revalidatePath("/settings");
 }

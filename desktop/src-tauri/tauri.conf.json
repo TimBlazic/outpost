@@ -4,8 +4,7 @@
   "version": "0.1.0",
   "identifier": "dev.timblazic.outpost",
   "build": {
-    "devUrl": "http://localhost:3000",
-    "frontendDist": "https://admin.timblazic.dev"
+    "frontendDist": "../splash"
   },
   "app": {
     "withGlobalTauri": false,

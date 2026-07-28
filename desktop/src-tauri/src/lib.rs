@@ -1,5 +1,9 @@
+use std::thread;
+use std::time::Duration;
+
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
+    webview::Color,
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_opener::OpenerExt;
@@ -7,6 +11,7 @@ use url::Url;
 
 const PROD_URL: &str = "https://admin.timblazic.dev";
 const DEV_URL: &str = "http://localhost:3000";
+const SPLASH_MS: u64 = 1600;
 
 fn app_start_url() -> &'static str {
     if cfg!(debug_assertions) {
@@ -19,13 +24,15 @@ fn app_start_url() -> &'static str {
 fn is_allowed_navigation(url: &Url) -> bool {
     match url.scheme() {
         "http" | "https" => {}
+        // Local splash assets (Tauri custom protocol)
+        "tauri" => return true,
         // Allow about:blank / data during intermediate loads
         "about" | "data" | "blob" => return true,
         _ => return false,
     }
 
     match url.host_str() {
-        Some("localhost") | Some("127.0.0.1") => true,
+        Some("localhost") | Some("127.0.0.1") | Some("tauri.localhost") => true,
         Some("admin.timblazic.dev") => true,
         // Supabase Auth redirects (magic link / OAuth) then bounce back to admin
         Some(host) if host.ends_with(".supabase.co") => true,
@@ -99,12 +106,13 @@ pub fn run() {
             let nav_handle = handle.clone();
             let new_win_handle = handle.clone();
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(start_url))
+            let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Outpost")
                 .inner_size(1280.0, 840.0)
                 .min_inner_size(900.0, 600.0)
                 .resizable(true)
                 .fullscreen(false)
+                .background_color(Color(0, 0, 0, 255))
                 .on_navigation(move |url| {
                     if is_allowed_navigation(url) {
                         true
@@ -118,6 +126,14 @@ pub fn run() {
                     tauri::webview::NewWindowResponse::Deny
                 })
                 .build()?;
+
+            let target = start_url;
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(SPLASH_MS));
+                if let Err(err) = win.navigate(target) {
+                    eprintln!("[outpost-desktop] splash navigate failed: {err}");
+                }
+            });
 
             let menu_handle = handle.clone();
             app.on_menu_event(move |app, event| match event.id().as_ref() {

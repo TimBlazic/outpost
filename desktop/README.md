@@ -2,6 +2,7 @@
 
 Thin macOS desktop shell that loads the Outpost studio CRM in a native window.
 
+- Starts on a local black splash (`desktop/splash`), then navigates to the CRM
 - **Dev:** `http://localhost:3000` (run Next.js separately)
 - **Release:** `https://admin.timblazic.dev`
 - Client portal stays in the browser; external links open with the system browser
