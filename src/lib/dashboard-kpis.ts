@@ -9,6 +9,7 @@ import {
   Clock,
   Crosshair,
   FileText,
+  Eye,
   Flame,
   Gauge,
   Globe,
@@ -18,13 +19,17 @@ import {
   Layers,
   Link2,
   Mail,
+  MapPin,
   MessageSquareReply,
+  MousePointerClick,
   Percent,
   PhoneCall,
   Radar,
   Receipt,
   Search,
   Send,
+  Share2,
+  Smartphone,
   Snowflake,
   Sparkles,
   Star,
@@ -100,9 +105,42 @@ export const dashboardKpiIds = [
   "issued_invoices",
   "active_projects",
   "project_value",
+  "web_visitors",
+  "web_pageviews",
+  "web_pages_per_visit",
+  "web_top_page",
+  "web_top_referrer",
+  "web_top_country",
+  "web_mobile_share",
 ] as const;
 
 export type DashboardKpiId = (typeof dashboardKpiIds)[number];
+
+/** KPIs that need a Vercel Web Analytics fetch for timblazic.dev. */
+export const siteAnalyticsKpiIds = [
+  "web_visitors",
+  "web_pageviews",
+  "web_pages_per_visit",
+  "web_top_page",
+  "web_top_referrer",
+  "web_top_country",
+  "web_mobile_share",
+] as const satisfies readonly DashboardKpiId[];
+
+export function selectionNeedsSiteAnalytics(selected: DashboardKpiId[]) {
+  return selected.some((id) =>
+    (siteAnalyticsKpiIds as readonly string[]).includes(id)
+  );
+}
+
+export type SiteAnalyticsKpiData = {
+  visitors: number;
+  pageviews: number;
+  topPage: { path: string; visitors: number } | null;
+  topReferrer: { host: string; visitors: number } | null;
+  topCountry: { code: string; visitors: number } | null;
+  mobileShare: number | null;
+};
 
 export type DashboardKpiMeta = {
   id: DashboardKpiId;
@@ -400,6 +438,48 @@ export const dashboardKpiCatalog: DashboardKpiMeta[] = [
     description: "Sum of active project values.",
     icon: Inbox,
   },
+  {
+    id: "web_visitors",
+    label: "Site visitors",
+    description: "timblazic.dev unique visitors (Vercel Analytics).",
+    icon: Eye,
+  },
+  {
+    id: "web_pageviews",
+    label: "Site pageviews",
+    description: "timblazic.dev pageviews in the selected range.",
+    icon: Globe,
+  },
+  {
+    id: "web_pages_per_visit",
+    label: "Pages / visit",
+    description: "Pageviews ÷ visitors on timblazic.dev.",
+    icon: MousePointerClick,
+  },
+  {
+    id: "web_top_page",
+    label: "Top page",
+    description: "Most-visited path on timblazic.dev.",
+    icon: MousePointerClick,
+  },
+  {
+    id: "web_top_referrer",
+    label: "Top referrer",
+    description: "Top traffic source hostname.",
+    icon: Share2,
+  },
+  {
+    id: "web_top_country",
+    label: "Top country",
+    description: "Country with the most visitors.",
+    icon: MapPin,
+  },
+  {
+    id: "web_mobile_share",
+    label: "Mobile share",
+    description: "% of visitors on mobile devices.",
+    icon: Smartphone,
+  },
 ];
 
 /** Default strip — matches the previous always-on dashboard cards. */
@@ -473,6 +553,15 @@ function lastTouchDay(lead: Lead) {
   );
 }
 
+function fmtCount(n: number) {
+  return n.toLocaleString("en-GB");
+}
+
+function truncatePath(path: string, max = 22) {
+  if (path.length <= max) return path;
+  return `${path.slice(0, max - 1)}…`;
+}
+
 export function computeDashboardKpis(input: {
   leads: Lead[];
   bounds: DateBounds;
@@ -480,6 +569,8 @@ export function computeDashboardKpis(input: {
   invoices?: Invoice[];
   projects?: Project[];
   revenueGoal?: number;
+  /** timblazic.dev Vercel Analytics — null = not configured / fetch failed */
+  siteAnalytics?: SiteAnalyticsKpiData | null;
 }): DashboardKpiStat[] {
   const {
     leads,
@@ -487,6 +578,7 @@ export function computeDashboardKpis(input: {
     invoices = [],
     projects = [],
     revenueGoal = 0,
+    siteAnalytics = null,
   } = input;
   const selected = normalizeDashboardKpis(input.selected);
   const periodLeads = leads.filter((l) =>
@@ -878,6 +970,70 @@ export function computeDashboardKpis(input: {
       value: eur(projectValue),
       sub: `${activeProjects} active`,
       icon: Inbox,
+    },
+    web_visitors: {
+      label: "Site visitors",
+      value: siteAnalytics ? fmtCount(siteAnalytics.visitors) : "—",
+      sub: siteAnalytics ? "timblazic.dev" : "connect in Analytics",
+      icon: Eye,
+    },
+    web_pageviews: {
+      label: "Site pageviews",
+      value: siteAnalytics ? fmtCount(siteAnalytics.pageviews) : "—",
+      sub: siteAnalytics ? "timblazic.dev" : "connect in Analytics",
+      icon: Globe,
+    },
+    web_pages_per_visit: {
+      label: "Pages / visit",
+      value:
+        siteAnalytics && siteAnalytics.visitors > 0
+          ? (siteAnalytics.pageviews / siteAnalytics.visitors).toFixed(1)
+          : "—",
+      sub: siteAnalytics ? "pageviews ÷ visitors" : "connect in Analytics",
+      icon: MousePointerClick,
+    },
+    web_top_page: {
+      label: "Top page",
+      value: siteAnalytics?.topPage
+        ? truncatePath(siteAnalytics.topPage.path)
+        : "—",
+      sub: siteAnalytics?.topPage
+        ? `${fmtCount(siteAnalytics.topPage.visitors)} visitors`
+        : siteAnalytics
+          ? "no pages yet"
+          : "connect in Analytics",
+      icon: MousePointerClick,
+    },
+    web_top_referrer: {
+      label: "Top referrer",
+      value: siteAnalytics?.topReferrer
+        ? truncatePath(siteAnalytics.topReferrer.host, 20)
+        : "—",
+      sub: siteAnalytics?.topReferrer
+        ? `${fmtCount(siteAnalytics.topReferrer.visitors)} visitors`
+        : siteAnalytics
+          ? "direct / none"
+          : "connect in Analytics",
+      icon: Share2,
+    },
+    web_top_country: {
+      label: "Top country",
+      value: siteAnalytics?.topCountry?.code ?? "—",
+      sub: siteAnalytics?.topCountry
+        ? `${fmtCount(siteAnalytics.topCountry.visitors)} visitors`
+        : siteAnalytics
+          ? "no data"
+          : "connect in Analytics",
+      icon: MapPin,
+    },
+    web_mobile_share: {
+      label: "Mobile share",
+      value:
+        siteAnalytics?.mobileShare != null
+          ? `${siteAnalytics.mobileShare}%`
+          : "—",
+      sub: siteAnalytics ? "of visitors" : "connect in Analytics",
+      icon: Smartphone,
     },
   };
 

@@ -32,6 +32,8 @@ import {
   computeDashboardKpis,
   dashboardKpiGridClass,
   normalizeDashboardKpis,
+  selectionNeedsSiteAnalytics,
+  type SiteAnalyticsKpiData,
 } from "@/lib/dashboard-kpis";
 import {
   dashboardRangeLabels,
@@ -55,6 +57,10 @@ import {
 import { eur, fmtDate, dueState, leadStatusColor } from "@/lib/format";
 import { getHostRole, getRequestHostname } from "@/lib/hosts";
 import { cn } from "@/lib/utils";
+import {
+  fetchSiteAnalyticsSummary,
+  getWebAnalyticsConfig,
+} from "@/lib/vercel/web-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +111,22 @@ export default async function DashboardPage({
   ]);
   const { revenueGoal, firmName } = settings;
   const goalYear = new Date().getFullYear();
+  const selectedKpis = normalizeDashboardKpis(settings.dashboardKpis);
+
+  let siteAnalytics: SiteAnalyticsKpiData | null = null;
+  if (selectionNeedsSiteAnalytics(selectedKpis)) {
+    const analyticsConfig = getWebAnalyticsConfig();
+    if (analyticsConfig) {
+      try {
+        siteAnalytics = await fetchSiteAnalyticsSummary(
+          analyticsConfig,
+          range
+        );
+      } catch {
+        siteAnalytics = null;
+      }
+    }
+  }
 
   const chartGranularity = revenueGranularity(bounds);
   const monthlyRevenue = monthlyInvoiceRevenueInRange(invoices, bounds);
@@ -114,7 +136,8 @@ export default async function DashboardPage({
     invoices,
     projects,
     revenueGoal: settings.revenueGoal,
-    selected: normalizeDashboardKpis(settings.dashboardKpis),
+    selected: selectedKpis,
+    siteAnalytics,
   });
 
   const actualRevenue = paidInvoiceRevenueInRange(invoices, bounds);

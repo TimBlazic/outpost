@@ -172,3 +172,106 @@ export function SourcePieChart({
     </ResponsiveContainer>
   );
 }
+
+export function TrafficAreaChart({
+  data,
+}: {
+  data: { label: string; visitors: number; pageviews: number }[];
+}) {
+  const dense = data.length > 10;
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <AreaChart data={data} margin={{ left: -8, right: 8, top: 8 }}>
+        <defs>
+          <linearGradient id="visitorsFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="var(--border)"
+          vertical={false}
+        />
+        <XAxis
+          dataKey="label"
+          tick={axisStyle}
+          tickLine={false}
+          axisLine={false}
+          interval={dense ? "preserveStartEnd" : 0}
+          minTickGap={dense ? 28 : 8}
+        />
+        <YAxis
+          tick={axisStyle}
+          tickLine={false}
+          axisLine={false}
+          allowDecimals={false}
+        />
+        <Tooltip contentStyle={tooltipStyle} />
+        <Area
+          type="monotone"
+          dataKey="visitors"
+          name="Visitors"
+          stroke="var(--chart-1)"
+          strokeWidth={2}
+          fill="url(#visitorsFill)"
+          dot={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="pageviews"
+          name="Pageviews"
+          stroke="var(--chart-3)"
+          strokeWidth={1.5}
+          dot={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function RankBarChart({
+  data,
+  valueLabel = "Visitors",
+}: {
+  data: { name: string; value: number }[];
+  valueLabel?: string;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(200, data.length * 28)}>
+      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="var(--border)"
+          horizontal={false}
+        />
+        <XAxis
+          type="number"
+          tick={axisStyle}
+          tickLine={false}
+          axisLine={false}
+          allowDecimals={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="name"
+          tick={axisStyle}
+          tickLine={false}
+          axisLine={false}
+          width={140}
+        />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          formatter={(v) => [Number(v).toLocaleString(), valueLabel]}
+          cursor={{ fill: "var(--muted)" }}
+        />
+        <Bar
+          dataKey="value"
+          fill="var(--chart-1)"
+          radius={[0, 4, 4, 0]}
+          barSize={16}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}

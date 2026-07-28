@@ -15,6 +15,7 @@ import {
   FileText,
   BookOpen,
   Images,
+  BarChart3,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -50,6 +51,7 @@ const nav = [
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/docs", label: "Docs", icon: BookOpen },
   { href: "/moodboard", label: "Moodboard", icon: Images },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 function useMessagesUnread() {

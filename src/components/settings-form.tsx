@@ -605,7 +605,8 @@ export function SettingsForm({
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                 Pick the cards for the home strip. Most follow the dashboard
                 date range; pipeline, follow-ups, outstanding, and projects stay
-                current.
+                current. Site cards use Vercel Analytics for timblazic.dev
+                (same range).
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
