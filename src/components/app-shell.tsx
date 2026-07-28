@@ -39,19 +39,48 @@ import type { StudioTheme } from "@/lib/theme/studio";
 
 const SIDEBAR_KEY = "outpost.sidebarCollapsed";
 
-const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/leads", label: "Leads", icon: Users },
-  { href: "/hunt", label: "Hunt", icon: Binoculars },
-  { href: "/clients", label: "Clients", icon: Building2 },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/messages", label: "Messages", icon: MessageSquare },
-  { href: "/quotes", label: "Quotes", icon: FileText },
-  { href: "/invoices", label: "Invoices", icon: Receipt },
-  { href: "/docs", label: "Docs", icon: BookOpen },
-  { href: "/moodboard", label: "Moodboard", icon: Images },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+};
+
+const navGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Pipeline",
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/leads", label: "Leads", icon: Users },
+      { href: "/hunt", label: "Hunt", icon: Binoculars },
+      { href: "/clients", label: "Clients", icon: Building2 },
+    ],
+  },
+  {
+    label: "Delivery",
+    items: [
+      { href: "/tasks", label: "Tasks", icon: CheckSquare },
+      { href: "/projects", label: "Projects", icon: FolderKanban },
+      { href: "/messages", label: "Messages", icon: MessageSquare },
+    ],
+  },
+  {
+    label: "Billing",
+    items: [
+      { href: "/quotes", label: "Quotes", icon: FileText },
+      { href: "/invoices", label: "Invoices", icon: Receipt },
+    ],
+  },
+  {
+    label: "Studio",
+    items: [
+      { href: "/docs", label: "Docs", icon: BookOpen },
+      { href: "/analytics", label: "Analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Moodboard",
+    items: [{ href: "/moodboard", label: "Moodboard", icon: Images }],
+  },
 ];
 
 function useMessagesUnread() {
@@ -139,53 +168,73 @@ function SidebarNav({
       </div>
       <nav
         className={cn(
-          "flex flex-1 flex-col gap-0.5 py-2",
+          "flex flex-1 flex-col gap-4 overflow-y-auto py-2",
           collapsed ? "items-center px-1.5" : "px-3"
         )}
       >
-        {nav.map((item) => {
-          const active =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
-          const unread = item.href === "/messages" ? messagesUnread : 0;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={
-                collapsed
-                  ? unread > 0
-                    ? `${item.label} (${unread})`
-                    : item.label
-                  : undefined
-              }
-              className={cn(
-                "relative flex items-center rounded-md text-sm transition-colors",
-                collapsed
-                  ? "size-9 justify-center"
-                  : "gap-3 px-3 py-2",
-                active
-                  ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
-              )}
-            >
-              <item.icon className="size-4 shrink-0 opacity-70" />
-              {!collapsed ? (
-                <>
-                  <span className="min-w-0 flex-1">{item.label}</span>
-                  {unread > 0 ? (
-                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground tabular-nums">
-                      {unread > 99 ? "99+" : unread}
-                    </span>
+        {navGroups.map((group, groupIndex) => (
+          <div
+            key={group.label}
+            className={cn(
+              "flex flex-col gap-0.5",
+              collapsed && "w-full items-center"
+            )}
+          >
+            {collapsed ? (
+              groupIndex > 0 ? (
+                <div
+                  className="mb-0.5 h-px w-5 bg-sidebar-border"
+                  aria-hidden
+                />
+              ) : null
+            ) : (
+              <p className="px-3 pb-1 text-[10px] font-medium tracking-[0.18em] uppercase text-muted-foreground/70">
+                {group.label}
+              </p>
+            )}
+            {group.items.map((item) => {
+              const active =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
+              const unread = item.href === "/messages" ? messagesUnread : 0;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={
+                    collapsed
+                      ? unread > 0
+                        ? `${item.label} (${unread})`
+                        : item.label
+                      : undefined
+                  }
+                  className={cn(
+                    "relative flex items-center rounded-md text-sm transition-colors",
+                    collapsed ? "size-9 justify-center" : "gap-3 px-3 py-2",
+                    active
+                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="size-4 shrink-0 opacity-70" />
+                  {!collapsed ? (
+                    <>
+                      <span className="min-w-0 flex-1">{item.label}</span>
+                      {unread > 0 ? (
+                        <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground tabular-nums">
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : unread > 0 ? (
+                    <span className="absolute top-1 right-1 size-2 rounded-full bg-primary" />
                   ) : null}
-                </>
-              ) : unread > 0 ? (
-                <span className="absolute top-1 right-1 size-2 rounded-full bg-primary" />
-              ) : null}
-            </Link>
-          );
-        })}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
       <div
         className={cn(
