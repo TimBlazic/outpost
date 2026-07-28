@@ -1680,6 +1680,8 @@ export type FirmSettings = {
   outboundFromName: string;
   /** Resend From email (must be on a verified domain) */
   outboundFromEmail: string;
+  /** Ordered dashboard KPI ids to show on the home strip */
+  dashboardKpis: string[];
 };
 
 export const defaultFirmSettings: FirmSettings = {
@@ -1717,9 +1719,20 @@ export const defaultFirmSettings: FirmSettings = {
   aiQualifyPricingPrompt: "",
   outboundFromName: "Tim",
   outboundFromEmail: "tim@timblazic.dev",
+  dashboardKpis: [
+    "new_leads",
+    "qualified_go",
+    "contacted",
+    "proposals",
+    "pipeline_value",
+    "conversion",
+  ],
 };
 
 export function normalizeFirmSettings(s: FirmSettings): FirmSettings {
+  const kpis = Array.isArray(s.dashboardKpis)
+    ? s.dashboardKpis.filter((x): x is string => typeof x === "string")
+    : [];
   return {
     ...defaultFirmSettings,
     ...s,
@@ -1734,6 +1747,7 @@ export function normalizeFirmSettings(s: FirmSettings): FirmSettings {
       s.outboundFromName?.trim() || defaultFirmSettings.outboundFromName,
     outboundFromEmail:
       s.outboundFromEmail?.trim() || defaultFirmSettings.outboundFromEmail,
+    dashboardKpis: kpis.length ? kpis : [...defaultFirmSettings.dashboardKpis],
   };
 }
 

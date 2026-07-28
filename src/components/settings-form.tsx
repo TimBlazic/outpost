@@ -8,18 +8,25 @@ import { DEFAULT_AI_EMAIL_SYSTEM_PROMPT } from "@/lib/ai/default-email-prompt";
 import { DEFAULT_AI_QUALIFY_PRICING_PROMPT } from "@/lib/ai/default-qualify-pricing";
 import { updateFirmSettings } from "@/lib/actions";
 import {
+  dashboardKpiCatalog,
+  defaultDashboardKpis,
+  normalizeDashboardKpis,
+  type DashboardKpiId,
+} from "@/lib/dashboard-kpis";
+import {
   clearInvoiceSignature,
   uploadInvoiceSignature,
 } from "@/lib/invoices/actions";
 import { signatureDisplayUrl } from "@/lib/invoices/signature-url";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export type SettingsSection = "studio" | "billing" | "ai" | "email";
+export type SettingsSection = "studio" | "billing" | "ai" | "email" | "dashboard";
 
 export function SettingsForm({
   settings,
@@ -71,6 +78,9 @@ export function SettingsForm({
   const [outboundFromEmail, setOutboundFromEmail] = useState(
     settings.outboundFromEmail
   );
+  const [dashboardKpis, setDashboardKpis] = useState<DashboardKpiId[]>(() =>
+    normalizeDashboardKpis(settings.dashboardKpis)
+  );
   const [saved, setSaved] = useState(false);
   const [sigError, setSigError] = useState<string | null>(null);
 
@@ -114,7 +124,25 @@ export function SettingsForm({
       next.outboundFromEmail =
         outboundFromEmail.trim() || "tim@timblazic.dev";
     }
+    if (section === "dashboard") {
+      next.dashboardKpis = normalizeDashboardKpis(dashboardKpis);
+    }
     return next;
+  }
+
+  function toggleKpi(id: DashboardKpiId, checked: boolean) {
+    setDashboardKpis((prev) => {
+      if (checked) {
+        if (prev.includes(id)) return prev;
+        // Keep catalog order for a stable dashboard strip.
+        const next = new Set([...prev, id]);
+        return dashboardKpiCatalog
+          .map((k) => k.id)
+          .filter((kpiId) => next.has(kpiId));
+      }
+      const next = prev.filter((x) => x !== id);
+      return next.length ? next : [...defaultDashboardKpis];
+    });
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -567,6 +595,74 @@ export function SettingsForm({
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {section === "dashboard" ? (
+        <div className="space-y-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Dashboard KPIs</h2>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                Pick the cards for the home strip. Most follow the dashboard
+                date range; pipeline, follow-ups, outstanding, and projects stay
+                current.
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {dashboardKpis.length} selected
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {dashboardKpiCatalog.map((kpi) => {
+              const checked = dashboardKpis.includes(kpi.id);
+              const Icon = kpi.icon;
+              return (
+                <label
+                  key={kpi.id}
+                  htmlFor={`kpi-${kpi.id}`}
+                  className={
+                    checked
+                      ? "relative flex cursor-pointer flex-col rounded-xl border border-foreground/20 bg-card p-4 shadow-xs ring-1 ring-foreground/10 transition-colors hover:bg-muted/30"
+                      : "relative flex cursor-pointer flex-col rounded-xl border border-border/70 bg-card/60 p-4 transition-colors hover:bg-muted/40"
+                  }
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <Icon className="size-4" />
+                    </span>
+                    <Checkbox
+                      id={`kpi-${kpi.id}`}
+                      checked={checked}
+                      onCheckedChange={(value) =>
+                        toggleKpi(kpi.id, value === true)
+                      }
+                    />
+                  </div>
+                  <span className="mt-3 text-sm font-medium">{kpi.label}</span>
+                  <span className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {kpi.description}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-border/70 pt-4">
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save dashboard KPIs"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => setDashboardKpis([...defaultDashboardKpis])}
+            >
+              Reset to default
+            </Button>
+            {saved && <span className="text-sm text-emerald-600">Saved</span>}
+          </div>
+        </div>
       ) : null}
     </form>
   );

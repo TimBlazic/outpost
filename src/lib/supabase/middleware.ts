@@ -45,8 +45,17 @@ export async function updateSession(request: NextRequest) {
   const isAuthCallback = pathname.startsWith("/auth");
   const isPortal = pathname.startsWith("/portal");
   const isInboundApi = pathname.startsWith("/api/leads/inbound");
+  // Cron routes authenticate with CRON_SECRET themselves.
+  const isCronApi = pathname.startsWith("/api/cron/");
 
-  if (!user && !isLogin && !isAuthCallback && !isPortal && !isInboundApi) {
+  if (
+    !user &&
+    !isLogin &&
+    !isAuthCallback &&
+    !isPortal &&
+    !isInboundApi &&
+    !isCronApi
+  ) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = loginPath;
     redirectUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);

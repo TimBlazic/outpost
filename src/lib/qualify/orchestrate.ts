@@ -1,5 +1,8 @@
 import { getCurrentProfile } from "@/lib/auth/session";
+import { members, type FirmSettings, type Member } from "@/lib/data";
+import { hasAdminClient } from "@/lib/supabase/admin";
 import { getFirmSettings, getLeads } from "@/lib/store";
+import { adminGetFirmSettings } from "./admin-db";
 import { lookupCompanywall } from "./companywall";
 import { fetchSite } from "./fetch-site";
 import { extractCompanyIdentity } from "./identity";
@@ -13,6 +16,33 @@ import type {
 } from "./types";
 import { findLeadIdByWebsiteHost, normalizeWebsiteUrl, websiteHost } from "./url";
 import { runQualifyDraft, runQualifyVerdict } from "./verdict";
+
+async function loadQualifyContext(opts?: {
+  skipDuplicateScan?: boolean;
+}): Promise<{
+  leads: Awaited<ReturnType<typeof getLeads>>;
+  settings: FirmSettings;
+  profile: Member;
+}> {
+  if (hasAdminClient()) {
+    const settings = await adminGetFirmSettings();
+    const profile: Member = {
+      ...members[0],
+      name: settings.firmName?.trim() || members[0].name,
+    };
+    return {
+      leads: opts?.skipDuplicateScan ? [] : await getLeads().catch(() => []),
+      settings,
+      profile,
+    };
+  }
+  const [leads, settings, profile] = await Promise.all([
+    opts?.skipDuplicateScan ? Promise.resolve([]) : getLeads(),
+    getFirmSettings(),
+    getCurrentProfile(),
+  ]);
+  return { leads, settings, profile };
+}
 
 function emptySite(error: string): QualifySiteResult {
   return {
@@ -44,6 +74,8 @@ export async function qualifyLead(input: {
   knownCompanyName?: string | null;
   /** Extra CRM context when site is missing (category, notes…). */
   leadContext?: string | null;
+  /** Background jobs already target one lead — skip loading all leads. */
+  skipDuplicateScan?: boolean;
 }): Promise<QualifyResult> {
   const known = input.knownCompanyName?.trim() || null;
   const rawUrl = input.websiteUrl?.trim() || "";
@@ -51,11 +83,9 @@ export async function qualifyLead(input: {
     throw new Error("Company name or website is required to qualify");
   }
 
-  const [leads, settings, profile] = await Promise.all([
-    getLeads(),
-    getFirmSettings(),
-    getCurrentProfile(),
-  ]);
+  const { leads, settings, profile } = await loadQualifyContext({
+    skipDuplicateScan: input.skipDuplicateScan,
+  });
 
   let website = "";
   let host = "";
@@ -164,14 +194,13 @@ export async function requalifyWithCompanywall(input: {
     host = "";
   }
 
-  const [companywall, settings, profile] = await Promise.all([
+  const [{ settings, profile }, companywall] = await Promise.all([
+    loadQualifyContext({ skipDuplicateScan: true }),
     lookupCompanywall({
       companyName: previous.identity.companyName,
       domain: host,
       companywallUrl: cwUrl,
     }),
-    getFirmSettings(),
-    getCurrentProfile(),
   ]);
 
   const ai = await runQualifyVerdict({

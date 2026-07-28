@@ -3,11 +3,6 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   ArrowUpRight,
-  TrendingUp,
-  Users,
-  Send,
-  Sparkles,
-  Target,
   AlertCircle,
   CalendarClock,
   CheckSquare,
@@ -34,9 +29,13 @@ import {
   tryClientPortalSession,
 } from "@/lib/client-accounts/session";
 import {
+  computeDashboardKpis,
+  dashboardKpiGridClass,
+  normalizeDashboardKpis,
+} from "@/lib/dashboard-kpis";
+import {
   dashboardRangeLabels,
   isDateInRange,
-  leadActivityDate,
   monthlyInvoiceRevenueInRange,
   monthsSpanned,
   outstandingInvoiceTotal,
@@ -107,39 +106,19 @@ export default async function DashboardPage({
   const { revenueGoal, firmName } = settings;
   const goalYear = new Date().getFullYear();
 
-  const periodLeads = leads.filter((l) =>
-    isDateInRange(leadActivityDate(l), bounds)
-  );
   const chartGranularity = revenueGranularity(bounds);
   const monthlyRevenue = monthlyInvoiceRevenueInRange(invoices, bounds);
+  const kpiStats = computeDashboardKpis({
+    leads,
+    bounds,
+    invoices,
+    projects,
+    revenueGoal: settings.revenueGoal,
+    selected: normalizeDashboardKpis(settings.dashboardKpis),
+  });
 
-  const newLeads = periodLeads.filter((l) =>
-    ["New", "Researching", "Ready to contact"].includes(l.status)
-  ).length;
-  const proposalLeads = periodLeads.filter((l) =>
-    ["Proposal sent", "Negotiating", "Won"].includes(l.status)
-  );
-  const proposals = proposalLeads.length;
-  const pricedProposals = proposalLeads.filter((l) => l.value > 0);
-  const proposalTotal = pricedProposals.reduce((s, l) => s + l.value, 0);
-  const proposalAvg = pricedProposals.length
-    ? Math.round(proposalTotal / pricedProposals.length)
-    : 0;
-  const won = periodLeads.filter((l) => l.status === "Won").length;
-  const lost = periodLeads.filter((l) => l.status === "Lost").length;
-  const qualifiedGoLeads = periodLeads.filter((l) => l.qualifyRating === "go");
-  const qualifiedGo = qualifiedGoLeads.length;
-  const pricedGo = qualifiedGoLeads.filter((l) => l.value > 0);
-  const avgDeal = pricedGo.length
-    ? Math.round(pricedGo.reduce((s, l) => s + l.value, 0) / pricedGo.length)
-    : 0;
-  // Open pipeline stays current (not range-sliced) so the board stays useful
-  const pipelineValue = leads
-    .filter((l) => !["Won", "Lost", "Not suitable"].includes(l.status))
-    .reduce((s, l) => s + l.value, 0);
   const actualRevenue = paidInvoiceRevenueInRange(invoices, bounds);
   const outstanding = outstandingInvoiceTotal(invoices);
-  const conversionRate = Math.round((won / (won + lost || 1)) * 100);
   const pricedProjects = projects.filter(
     (p) =>
       !isArchived(p) &&
@@ -219,36 +198,19 @@ export default async function DashboardPage({
         <DashboardRangeSelect value={range} />
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-        <StatCard label="New leads" value={String(newLeads)} icon={Users} />
-        <StatCard
-          label="Proposals sent"
-          value={String(proposals)}
-          sub={
-            pricedProposals.length
-              ? `avg ${eur(proposalAvg)} · total ${eur(proposalTotal)}`
-              : "avg — · total —"
-          }
-          icon={Send}
-        />
-        <StatCard
-          label="Qualified go"
-          value={String(qualifiedGo)}
-          sub={avgDeal > 0 ? `avg deal ${eur(avgDeal)}` : "avg deal —"}
-          icon={Sparkles}
-        />
-        <StatCard
-          label="Pipeline value"
-          value={eur(pipelineValue)}
-          icon={TrendingUp}
-        />
-        <StatCard
-          label="Conversion"
-          value={`${conversionRate}%`}
-          sub={`${won} won · ${lost} lost`}
-          icon={Target}
-        />
-      </div>
+      {kpiStats.length > 0 ? (
+        <div className={dashboardKpiGridClass(kpiStats.length)}>
+          {kpiStats.map((kpi) => (
+            <StatCard
+              key={kpi.id}
+              label={kpi.label}
+              value={kpi.value}
+              sub={kpi.sub}
+              icon={kpi.icon}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

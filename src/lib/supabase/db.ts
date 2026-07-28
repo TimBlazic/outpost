@@ -951,13 +951,15 @@ export async function getFirmSettings(): Promise<FirmSettings> {
     aiQualifyPricingPrompt: (data.ai_qualify_pricing_prompt as string) ?? "",
     outboundFromName: (data.outbound_from_name as string) ?? "",
     outboundFromEmail: (data.outbound_from_email as string) ?? "",
+    dashboardKpis: (data.dashboard_kpis as string[]) ??
+      defaultFirmSettings.dashboardKpis,
   });
 }
 
 export async function saveFirmSettings(settings: FirmSettings) {
   const supabase = await createClient();
   const s = normalizeFirmSettings(settings);
-  const { error } = await supabase.from("firm_settings").upsert({
+  const row = {
     id: "default",
     firm_name: s.firmName,
     revenue_goal: s.revenueGoal,
@@ -986,8 +988,21 @@ export async function saveFirmSettings(settings: FirmSettings) {
     ai_qualify_pricing_prompt: s.aiQualifyPricingPrompt,
     outbound_from_name: s.outboundFromName,
     outbound_from_email: s.outboundFromEmail,
+    dashboard_kpis: s.dashboardKpis,
     updated_at: new Date().toISOString(),
-  });
+  };
+  const { error } = await supabase.from("firm_settings").upsert(row);
+  if (
+    error &&
+    /dashboard_kpis|Could not find/i.test(error.message ?? "")
+  ) {
+    const { dashboard_kpis: _omit, ...legacy } = row;
+    const retry = await supabase.from("firm_settings").upsert(legacy);
+    throwIf(retry.error);
+    throw new Error(
+      "Run supabase/migrations/20260728120000_dashboard_kpis.sql in the Supabase SQL Editor, then save again."
+    );
+  }
   throwIf(error);
 }
 

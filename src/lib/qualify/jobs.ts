@@ -2,7 +2,15 @@ import { after } from "next/server";
 
 import { createAdminClient, hasAdminClient } from "@/lib/supabase/admin";
 import { getLeadById, getLeads } from "@/lib/store";
+import { adminGetLeadById } from "./admin-db";
 import { applyQualifyToLead } from "./apply";
+
+async function loadLeadForJob(leadId: string) {
+  if (hasAdminClient()) {
+    return adminGetLeadById(leadId);
+  }
+  return getLeadById(leadId);
+}
 
 export type LeadQualifyJobStatus =
   | "pending"
@@ -13,6 +21,8 @@ export type LeadQualifyJobStatus =
 
 export const MAX_QUALIFY_ATTEMPTS = 3;
 export const BULK_QUALIFY_CAP = 200;
+/** If a worker dies mid-run (Vercel timeout, crash), reclaim so the queue unblocks. */
+export const STALE_RUNNING_MS = 10 * 60 * 1000;
 
 export function isLeadQualifyEligible(lead: {
   website?: string | null;
@@ -52,7 +62,7 @@ export async function enqueueLeadQualify(
     return { enqueued: false, reason: "no_admin" };
   }
 
-  const lead = await getLeadById(leadId);
+  const lead = await loadLeadForJob(leadId);
   if (!lead) return { enqueued: false, reason: "not_found" };
 
   const force = Boolean(opts?.force);
@@ -125,6 +135,31 @@ export async function isLeadQualifyQueued(leadId: string): Promise<boolean> {
   return Boolean(data);
 }
 
+async function reclaimStaleRunningJobs(
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_RUNNING_MS).toISOString();
+  const { data, error } = await supabase
+    .from("lead_qualify_jobs")
+    .update({
+      status: "pending",
+      last_error: "reclaimed_stale_running",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("status", "running")
+    .lt("updated_at", cutoff)
+    .select("id");
+  if (error) {
+    console.error("[lead-qualify] stale reclaim failed", error.message);
+    return 0;
+  }
+  const n = data?.length ?? 0;
+  if (n > 0) {
+    console.warn(`[lead-qualify] reclaimed ${n} stale running job(s)`);
+  }
+  return n;
+}
+
 export async function flushLeadQualifyJobs(): Promise<{
   processed: number;
   done: number;
@@ -136,6 +171,8 @@ export async function flushLeadQualifyJobs(): Promise<{
 
   const supabase = createAdminClient();
   const now = new Date().toISOString();
+
+  await reclaimStaleRunningJobs(supabase);
 
   const { data: running } = await supabase
     .from("lead_qualify_jobs")
@@ -167,8 +204,21 @@ export async function flushLeadQualifyJobs(): Promise<{
   result.processed = 1;
 
   try {
-    const lead = await getLeadById(claimed.lead_id as string);
-    if (!lead?.website?.trim() && !lead?.company?.trim()) {
+    const lead = await loadLeadForJob(claimed.lead_id as string);
+    if (!lead) {
+      await supabase
+        .from("lead_qualify_jobs")
+        .update({
+          status: "failed",
+          last_error: "lead_not_found",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", claimed.id);
+      result.failed = 1;
+      scheduleLeadQualifyFlush();
+      return result;
+    }
+    if (!lead.website?.trim() && !lead.company?.trim()) {
       await supabase
         .from("lead_qualify_jobs")
         .update({
