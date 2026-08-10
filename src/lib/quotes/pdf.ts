@@ -157,10 +157,17 @@ export async function buildQuotePdf(
     no: "NO",
     desc: sl ? "OPIS" : "DESCRIPTION",
     amount: sl ? "ZNESEK" : "AMOUNT",
+    oneTime: sl ? "ENKRATNO" : "ONE-TIME",
+    monthly: sl ? "MESEČNO" : "MONTHLY",
     total: sl ? "SKUPAJ" : "TOTAL",
+    monthlyTotal: sl ? "MESEČNO" : "MONTHLY",
+    perMonth: sl ? "/ mesec" : "/ month",
     vat: sl ? "Zneski vključujejo DDV" : "Amounts include VAT",
     notes: sl ? "OPOMBE" : "NOTES",
   };
+
+  const monthlyItems = quote.monthlyItems ?? [];
+  const showMonthly = monthlyItems.length > 0 && quote.monthlyTotal > 0;
 
   const draw = (
     s: string,
@@ -343,42 +350,66 @@ export async function buildQuotePdf(
   const cNoL = tL;
   const cDescL = tL + tW * (1 / 12);
   const cAmtR = tR;
-
   const theadH = 26;
-  rrFill(page, MARGIN, y - theadH, CW, theadH, 8, C.bgcard);
-  const thY = y - 17;
-  draw(L.no, cNoL, thY, { size: 8, bold: true, color: C.mgrey });
-  draw(L.desc, cDescL, thY, { size: 8, bold: true, color: C.mgrey });
-  drawR(L.amount, cAmtR, thY, { size: 8, bold: true, color: C.mgrey });
-  y -= theadH;
-
   const rowH = 32;
-  const items = quote.lineItems.length
+
+  const drawItemsTable = (
+    items: Array<{ description: string; amount: number }>,
+    sectionLabel?: string
+  ) => {
+    if (sectionLabel) {
+      draw(sectionLabel, MARGIN, y, { size: 8, bold: true, color: C.mgrey });
+      y -= 14;
+    }
+    rrFill(page, MARGIN, y - theadH, CW, theadH, 8, C.bgcard);
+    const thY = y - 17;
+    draw(L.no, cNoL, thY, { size: 8, bold: true, color: C.mgrey });
+    draw(L.desc, cDescL, thY, { size: 8, bold: true, color: C.mgrey });
+    drawR(L.amount, cAmtR, thY, { size: 8, bold: true, color: C.mgrey });
+    y -= theadH;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      y -= rowH;
+      const rY = y + rowH / 2 - 3;
+      if (i < items.length - 1) {
+        hline(y, MARGIN + 4, R - 4, C.rowdiv, 0.5);
+      }
+      draw(String(i + 1), cNoL, rY, { size: 9.5, color: C.mgrey });
+      draw(
+        safe(stripQuoteMarkdown(item.description || "—").slice(0, 52)),
+        cDescL,
+        rY,
+        { size: 9.5 }
+      );
+      drawR(fmtMoney(item.amount), cAmtR, rY, { size: 9.5, bold: true });
+    }
+  };
+
+  const oneTimeItems = quote.lineItems.length
     ? quote.lineItems
     : [{ description: "—", amount: 0 }];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    y -= rowH;
-    const rY = y + rowH / 2 - 3;
-    if (i < items.length - 1) {
-      hline(y, MARGIN + 4, R - 4, C.rowdiv, 0.5);
-    }
-    draw(String(i + 1), cNoL, rY, { size: 9.5, color: C.mgrey });
-    draw(
-      safe(stripQuoteMarkdown(item.description || "—").slice(0, 52)),
-      cDescL,
-      rY,
-      { size: 9.5 }
-    );
-    drawR(fmtMoney(item.amount), cAmtR, rY, { size: 9.5, bold: true });
+  drawItemsTable(oneTimeItems, showMonthly ? L.oneTime : undefined);
+
+  if (showMonthly) {
+    y -= 16;
+    drawItemsTable(monthlyItems, L.monthly);
   }
 
   y -= 12;
-  const totBlockW = 240;
+  const totBlockW = 260;
   const totL = R - totBlockW;
   draw(`${L.total} EUR:`, totL, y, { size: 9.5, bold: true });
   drawR(quote.total.toFixed(2), R, y, { size: 9.5, bold: true });
   y -= 14;
+  if (showMonthly) {
+    draw(`${L.monthlyTotal} EUR ${L.perMonth}:`, totL, y, {
+      size: 9.5,
+      bold: true,
+    });
+    drawR(quote.monthlyTotal.toFixed(2), R, y, { size: 9.5, bold: true });
+    y -= 14;
+  }
   drawR(L.vat, R, y, { size: 8, color: C.mgrey });
   y -= 24;
 

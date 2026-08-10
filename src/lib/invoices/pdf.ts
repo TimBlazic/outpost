@@ -15,9 +15,17 @@ export type InvoiceForPdf = {
     unitPrice: number;
     taxRate?: number;
   }>;
+  monthlyItems?: Array<{
+    description: string;
+    qty: number;
+    unit?: string | null;
+    unitPrice: number;
+    taxRate?: number;
+  }>;
   subtotal: number;
   taxTotal: number;
   total: number;
+  monthlyTotal?: number;
   invoiceDescription?: string | null;
   notes?: string | null;
 };
@@ -338,38 +346,65 @@ export async function generateInvoicePdf(
   const cPriceR = tL + tW * (9/12);
   const cTotR   = tR;
 
-  // Header row — rounded-t-lg = top corners only
-  const theadH = 26; // reduced header height
-  rrFill(page, MARGIN, y - theadH, CW, theadH, 8, C.bgcard);
-
-  const thY = y - 17; // vertically centered: (26 - 8) / 2 + 8/2 ≈ 17
-  draw("NO",          cNoL,    thY, {size:8, bold:true, color:C.mgrey});
-  draw("DESCRIPTION", cDescL,  thY, {size:8, bold:true, color:C.mgrey});
-  drawR("QUANTITY",   cQtyR,   thY, {size:8, bold:true, color:C.mgrey});
-  drawR("UNIT",       cUnitR,  thY, {size:8, bold:true, color:C.mgrey});
-  drawR("UNIT PRICE", cPriceR, thY, {size:8, bold:true, color:C.mgrey});
-  drawR("TOTAL",      cTotR,   thY, {size:8, bold:true, color:C.mgrey});
-  y -= theadH;
-
-  // Rows: py-3 = 12px top+bottom, text-sm ≈ 9.5pt → rowH = 32
+  const theadH = 26;
   const rowH = 32;
-  for (let i=0; i<invoice.lineItems.length; i++) {
-    const item = invoice.lineItems[i];
-    y -= rowH;
-    const lineTotal = item.qty * item.unitPrice;
-    const rY = y + rowH/2 - 3; // vertically centered
+  const monthlyItems = invoice.monthlyItems ?? [];
+  const showMonthly =
+    monthlyItems.length > 0 && (invoice.monthlyTotal ?? 0) > 0;
 
-    // border-b border-[#eee] — only between rows, not after last
-    if (i < invoice.lineItems.length - 1) {
-      hline(y, MARGIN+4, R-4, C.rowdiv, 0.5);
+  const drawItemsTable = (
+    items: InvoiceForPdf["lineItems"],
+    sectionLabel?: string
+  ) => {
+    if (sectionLabel) {
+      draw(sectionLabel, MARGIN, y, { size: 8, bold: true, color: C.mgrey });
+      y -= 14;
     }
+    rrFill(page, MARGIN, y - theadH, CW, theadH, 8, C.bgcard);
+    const thY = y - 17;
+    draw("NO", cNoL, thY, { size: 8, bold: true, color: C.mgrey });
+    draw("DESCRIPTION", cDescL, thY, { size: 8, bold: true, color: C.mgrey });
+    drawR("QUANTITY", cQtyR, thY, { size: 8, bold: true, color: C.mgrey });
+    drawR("UNIT", cUnitR, thY, { size: 8, bold: true, color: C.mgrey });
+    drawR("UNIT PRICE", cPriceR, thY, { size: 8, bold: true, color: C.mgrey });
+    drawR("TOTAL", cTotR, thY, { size: 8, bold: true, color: C.mgrey });
+    y -= theadH;
 
-    draw(String(i+1),                               cNoL,    rY, {size:9.5, color:C.mgrey});
-    draw(safe((item.description||"—").slice(0,34)),  cDescL,  rY, {size:9.5});
-    drawR(String(item.qty),                          cQtyR,   rY, {size:9.5, color:C.dgrey});
-    drawR(safe((item.unit||"—").slice(0,10)),         cUnitR,  rY, {size:9.5, color:C.dgrey});
-    drawR(fmtMoney(invoice.currency,item.unitPrice),  cPriceR, rY, {size:9.5, color:C.dgrey});
-    drawR(fmtMoney(invoice.currency,lineTotal),       cTotR,   rY, {size:9.5, bold:true});
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      y -= rowH;
+      const lineTotal = item.qty * item.unitPrice;
+      const rY = y + rowH / 2 - 3;
+
+      if (i < items.length - 1) {
+        hline(y, MARGIN + 4, R - 4, C.rowdiv, 0.5);
+      }
+
+      draw(String(i + 1), cNoL, rY, { size: 9.5, color: C.mgrey });
+      draw(safe((item.description || "—").slice(0, 34)), cDescL, rY, {
+        size: 9.5,
+      });
+      drawR(String(item.qty), cQtyR, rY, { size: 9.5, color: C.dgrey });
+      drawR(safe((item.unit || "—").slice(0, 10)), cUnitR, rY, {
+        size: 9.5,
+        color: C.dgrey,
+      });
+      drawR(fmtMoney(invoice.currency, item.unitPrice), cPriceR, rY, {
+        size: 9.5,
+        color: C.dgrey,
+      });
+      drawR(fmtMoney(invoice.currency, lineTotal), cTotR, rY, {
+        size: 9.5,
+        bold: true,
+      });
+    }
+  };
+
+  drawItemsTable(invoice.lineItems, showMonthly ? "ONE-TIME" : undefined);
+
+  if (showMonthly) {
+    y -= 16;
+    drawItemsTable(monthlyItems, "MONTHLY");
   }
 
   y -= 4; // small gap before totals
@@ -379,6 +414,7 @@ export async function generateInvoicePdf(
   //    mirrors: only show subtotal/tax when taxTotal > 0
   // ════════════════════════════════════════════════════════════════════════════
   const { subtotal, taxTotal, total } = computeTotals(invoice.lineItems);
+  const monthlyTotals = computeTotals(monthlyItems);
 
   const totBlockW = 260;
   const totL = R - totBlockW;
@@ -400,6 +436,11 @@ export async function generateInvoicePdf(
   // Total row — text-sm font-bold both sides
   draw(`TOTAL AMOUNT PAYABLE IN ${invoice.currency}:`, totL, ty, {size:9.5, bold:true});
   drawR(total.toFixed(2), R, ty, {size:9.5, bold:true});
+  ty -= 14;
+  if (showMonthly) {
+    draw(`MONTHLY IN ${invoice.currency}:`, totL, ty, { size: 9.5, bold: true });
+    drawR(monthlyTotals.total.toFixed(2), R, ty, { size: 9.5, bold: true });
+  }
 
   y = ty - 24; // gap before notes
 

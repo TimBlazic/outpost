@@ -97,9 +97,15 @@ export function QuoteEditor({
   const [lines, setLines] = useState<EditorLine[]>(
     toLines(quote?.lineItems ?? [])
   );
+  const [monthlyLines, setMonthlyLines] = useState<EditorLine[]>(
+    quote?.monthlyItems?.length ? toLines(quote.monthlyItems) : []
+  );
 
-  const totals = computeQuoteTotals(toInput(lines));
-  const hasGenerated = Boolean(scope.trim() || toInput(lines).length);
+  const oneTimeItems = toInput(lines);
+  const monthlyItems = toInput(monthlyLines);
+  const totals = computeQuoteTotals(oneTimeItems);
+  const monthlyTotals = computeQuoteTotals(monthlyItems);
+  const hasGenerated = Boolean(scope.trim() || oneTimeItems.length);
 
   const backHref =
     mode === "edit" && quote ? `/quotes/${quote.id}` : "/quotes";
@@ -125,7 +131,8 @@ export function QuoteEditor({
       notes,
       discoveryNotes: dump,
       projectDuration,
-      lineItems: toInput(lines),
+      lineItems: oneTimeItems,
+      monthlyItems,
       validUntil: validUntil || null,
     };
   }
@@ -319,7 +326,12 @@ export function QuoteEditor({
           {hasGenerated ? (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-3">
-                <CardTitle className="text-base">Line items</CardTitle>
+                <div>
+                  <CardTitle className="text-base">One-time</CardTitle>
+                  <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                    Setup, build, launch — billed once.
+                  </p>
+                </div>
                 <Button
                   type="button"
                   size="sm"
@@ -341,7 +353,7 @@ export function QuoteEditor({
                     className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_7rem_2.5rem]"
                   >
                     <Input
-                      placeholder="e.g. Osnovni SEO"
+                      placeholder="e.g. Spletna stran"
                       value={line.description}
                       onChange={(e) =>
                         setLines((prev) =>
@@ -387,6 +399,90 @@ export function QuoteEditor({
 
           {hasGenerated ? (
             <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Monthly</CardTitle>
+                  <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                    Hosting, support, small fixes — optional.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setMonthlyLines((prev) =>
+                      prev.length ? [...prev, emptyLine()] : [emptyLine()]
+                    )
+                  }
+                >
+                  <Plus className="size-4" /> Add row
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {monthlyLines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No monthly items — add hosting or retainer if needed.
+                  </p>
+                ) : (
+                  <>
+                    <div className="hidden grid-cols-[1fr_7rem_2.5rem] gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+                      <span>Description</span>
+                      <span className="text-right">/ month</span>
+                      <span />
+                    </div>
+                    {monthlyLines.map((line, i) => (
+                      <div
+                        key={i}
+                        className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_7rem_2.5rem]"
+                      >
+                        <Input
+                          placeholder="e.g. Gostovanje + support"
+                          value={line.description}
+                          onChange={(e) =>
+                            setMonthlyLines((prev) =>
+                              prev.map((l, idx) =>
+                                idx === i
+                                  ? { ...l, description: e.target.value }
+                                  : l
+                              )
+                            )
+                          }
+                        />
+                        <Input
+                          className="text-right"
+                          placeholder="0"
+                          value={line.amount}
+                          onChange={(e) =>
+                            setMonthlyLines((prev) =>
+                              prev.map((l, idx) =>
+                                idx === i ? { ...l, amount: e.target.value } : l
+                              )
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            setMonthlyLines((prev) =>
+                              prev.filter((_, idx) => idx !== i)
+                            )
+                          }
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {hasGenerated ? (
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Generated copy</CardTitle>
               </CardHeader>
@@ -425,14 +521,30 @@ export function QuoteEditor({
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Total</span>
+                <span className="text-muted-foreground">One-time</span>
                 <span className="font-semibold tabular-nums">
                   {eur(totals.total)}
                 </span>
               </div>
+              {monthlyTotals.total > 0 ? (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Monthly</span>
+                  <span className="font-semibold tabular-nums">
+                    {eur(monthlyTotals.total)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      / mo
+                    </span>
+                  </span>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-2">
                 <span className="text-muted-foreground">Items</span>
-                <span>{toInput(lines).length}</span>
+                <span>
+                  {oneTimeItems.length}
+                  {monthlyItems.length
+                    ? ` + ${monthlyItems.length} mo`
+                    : ""}
+                </span>
               </div>
               <div>
                 <Label htmlFor="valid" className="mb-1.5 text-muted-foreground">

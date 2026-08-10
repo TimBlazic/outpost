@@ -61,6 +61,7 @@ export type QuoteInput = {
   discoveryNotes: string;
   projectDuration: string;
   lineItems: QuoteLineItem[];
+  monthlyItems: QuoteLineItem[];
   validUntil: string | null;
 };
 
@@ -69,7 +70,9 @@ export type QuoteInput = {
 
 function buildFields(input: QuoteInput) {
   const lineItems = input.lineItems;
+  const monthlyItems = input.monthlyItems ?? [];
   const totals = computeQuoteTotals(lineItems);
+  const monthly = computeQuoteTotals(monthlyItems);
   return {
     leadId: input.leadId,
     locale: input.locale,
@@ -82,9 +85,11 @@ function buildFields(input: QuoteInput) {
     discoveryNotes: input.discoveryNotes,
     projectDuration: input.projectDuration.trim(),
     lineItems,
+    monthlyItems,
     currency: "EUR" as const,
     validUntil: input.validUntil?.trim() || null,
     ...totals,
+    monthlyTotal: monthly.total,
   };
 }
 

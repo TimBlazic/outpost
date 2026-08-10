@@ -122,8 +122,11 @@ export function InvoiceDetail({
           </div>
           <p className="text-sm text-muted-foreground">
             {invoice.clientSnapshot.companyName || "No client"} ·{" "}
-            {money(invoice.currency, invoice.total)} · Issue{" "}
-            {fmtDateLong(invoice.issueDate)}
+            {money(invoice.currency, invoice.total)}
+            {invoice.monthlyTotal > 0
+              ? ` · ${money(invoice.currency, invoice.monthlyTotal)}/mo`
+              : ""}{" "}
+            · Issue {fmtDateLong(invoice.issueDate)}
             {invoice.paidAt ? ` · Paid ${fmtDateLong(invoice.paidAt)}` : ""}
           </p>
           {invoice.projectId && projectName ? (

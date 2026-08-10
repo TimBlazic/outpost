@@ -49,10 +49,17 @@ export function QuotePreview({
     scope: sl ? "OBSEG" : "SCOPE",
     desc: sl ? "OPIS" : "DESCRIPTION",
     amount: sl ? "ZNESEK" : "AMOUNT",
+    oneTime: sl ? "ENKRATNO" : "ONE-TIME",
+    monthly: sl ? "MESEČNO" : "MONTHLY",
     total: sl ? "SKUPAJ" : "TOTAL",
+    monthlyTotal: sl ? "MESEČNO" : "MONTHLY",
+    perMonth: sl ? "/ mesec" : "/ month",
     vat: sl ? "Zneski vključujejo DDV" : "Amounts include VAT",
     notes: sl ? "OPOMBE" : "NOTES",
   };
+
+  const monthlyItems = quote.monthlyItems ?? [];
+  const showMonthly = monthlyItems.length > 0 && quote.monthlyTotal > 0;
 
   const scopeBody = stripQuoteMarkdown(quote.scope);
   const notesBody = stripQuoteMarkdown(quote.notes);
@@ -177,8 +184,13 @@ export function QuotePreview({
           </div>
         ) : null}
 
-        {/* Line items */}
+        {/* One-time line items */}
         <div className="pt-1">
+          {showMonthly ? (
+            <p className="mb-2 text-[11px] font-bold tracking-wide text-[#888] uppercase">
+              {L.oneTime}
+            </p>
+          ) : null}
           <div className="grid grid-cols-12 gap-2 rounded-lg bg-[#f5f5f5] px-2 py-3 text-[11px] font-bold tracking-wide text-[#888] uppercase">
             <span className="col-span-1">NO</span>
             <span className="col-span-8">{L.desc}</span>
@@ -203,12 +215,52 @@ export function QuotePreview({
           ))}
         </div>
 
-        {/* Total */}
+        {showMonthly ? (
+          <div className="mt-6 pt-1">
+            <p className="mb-2 text-[11px] font-bold tracking-wide text-[#888] uppercase">
+              {L.monthly}
+            </p>
+            <div className="grid grid-cols-12 gap-2 rounded-lg bg-[#f5f5f5] px-2 py-3 text-[11px] font-bold tracking-wide text-[#888] uppercase">
+              <span className="col-span-1">NO</span>
+              <span className="col-span-8">{L.desc}</span>
+              <span className="col-span-3 text-right">{L.amount}</span>
+            </div>
+            {monthlyItems.map((line, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "grid grid-cols-12 items-center gap-2 px-2 py-3 text-sm",
+                  i < monthlyItems.length - 1 && "border-b border-[#eee]"
+                )}
+              >
+                <span className="col-span-1 text-[#888]">{i + 1}</span>
+                <span className="col-span-8 text-[#111]">
+                  {stripQuoteMarkdown(line.description || "—")}
+                </span>
+                <span className="col-span-3 text-right font-medium tabular-nums text-[#111]">
+                  {fmtMoney(line.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Totals */}
         <div className="mt-4 flex flex-col items-end gap-1">
           <div className="flex min-w-[240px] items-baseline justify-between gap-6 text-sm font-bold">
             <span>{L.total} EUR:</span>
             <span className="tabular-nums">{quote.total.toFixed(2)}</span>
           </div>
+          {showMonthly ? (
+            <div className="flex min-w-[240px] items-baseline justify-between gap-6 text-sm font-bold">
+              <span>
+                {L.monthlyTotal} EUR {L.perMonth}:
+              </span>
+              <span className="tabular-nums">
+                {quote.monthlyTotal.toFixed(2)}
+              </span>
+            </div>
+          ) : null}
           <p className="text-[12px] text-[#888]">{L.vat}</p>
         </div>
 

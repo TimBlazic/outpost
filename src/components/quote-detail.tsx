@@ -91,6 +91,9 @@ export function QuoteDetail({
           <p className="text-sm text-muted-foreground">
             {quote.clientCompany || quote.clientName || "No recipient"} ·{" "}
             {eur(quote.total)}
+            {quote.monthlyTotal > 0
+              ? ` · ${eur(quote.monthlyTotal)}/mo`
+              : ""}
             {quote.validUntil
               ? ` · Valid ${fmtDateLong(quote.validUntil)}`
               : ""}

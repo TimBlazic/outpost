@@ -70,6 +70,9 @@ export function InvoicePreview({
   ];
 
   const { subtotal, taxTotal, total } = computeInvoiceTotals(invoice.lineItems);
+  const monthlyItems = invoice.monthlyItems ?? [];
+  const monthly = computeInvoiceTotals(monthlyItems);
+  const showMonthly = monthlyItems.length > 0 && monthly.total > 0;
 
   const taxDisclaimer =
     taxTotal > 0
@@ -180,8 +183,13 @@ export function InvoicePreview({
           </div>
         </div>
 
-        {/* 4. ITEMS TABLE */}
+        {/* 4. ONE-TIME ITEMS */}
         <div className="pt-1">
+          {showMonthly ? (
+            <p className="mb-2 text-[11px] font-bold tracking-wide text-[#888] uppercase">
+              ONE-TIME
+            </p>
+          ) : null}
           <div className="grid grid-cols-12 gap-2 rounded-lg bg-[#f5f5f5] px-2 py-3 text-[11px] font-bold tracking-wide text-[#888] uppercase">
             <span className="col-span-1">NO</span>
             <span className="col-span-4">DESCRIPTION</span>
@@ -221,6 +229,51 @@ export function InvoicePreview({
           })}
         </div>
 
+        {showMonthly ? (
+          <div className="mt-6 pt-1">
+            <p className="mb-2 text-[11px] font-bold tracking-wide text-[#888] uppercase">
+              MONTHLY
+            </p>
+            <div className="grid grid-cols-12 gap-2 rounded-lg bg-[#f5f5f5] px-2 py-3 text-[11px] font-bold tracking-wide text-[#888] uppercase">
+              <span className="col-span-1">NO</span>
+              <span className="col-span-4">DESCRIPTION</span>
+              <span className="col-span-1 text-right">QUANTITY</span>
+              <span className="col-span-1 text-right">UNIT</span>
+              <span className="col-span-2 text-right">UNIT PRICE</span>
+              <span className="col-span-3 text-right">TOTAL</span>
+            </div>
+            {monthlyItems.map((line, i) => {
+              const lineTotal = line.qty * line.unitPrice;
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    "grid grid-cols-12 items-center gap-2 px-2 py-3 text-sm",
+                    i < monthlyItems.length - 1 && "border-b border-[#eee]"
+                  )}
+                >
+                  <span className="col-span-1 text-[#888]">{i + 1}</span>
+                  <span className="col-span-4 text-[#111]">
+                    {line.description || "—"}
+                  </span>
+                  <span className="col-span-1 text-right tabular-nums text-[#555]">
+                    {line.qty}
+                  </span>
+                  <span className="col-span-1 text-right text-[#555]">
+                    {line.unit || "—"}
+                  </span>
+                  <span className="col-span-2 text-right tabular-nums text-[#555]">
+                    {fmtMoney(invoice.currency, line.unitPrice)}
+                  </span>
+                  <span className="col-span-3 text-right font-bold tabular-nums text-[#111]">
+                    {fmtMoney(invoice.currency, lineTotal)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
         {/* 5. TOTALS */}
         <div className="flex justify-end">
           <div className="min-w-[240px] space-y-2 text-right">
@@ -248,6 +301,16 @@ export function InvoicePreview({
                 {total.toFixed(2)}
               </span>
             </div>
+            {showMonthly ? (
+              <div className="flex items-baseline justify-between gap-6 pt-1">
+                <span className="text-sm font-bold text-[#111]">
+                  MONTHLY IN {invoice.currency}:
+                </span>
+                <span className="text-sm font-bold tabular-nums text-[#111]">
+                  {monthly.total.toFixed(2)}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
 

@@ -161,6 +161,11 @@ export function InvoiceEditor({
       ? invoice.lineItems.map(toEditorLine)
       : [emptyLine()]
   );
+  const [monthlyItems, setMonthlyItems] = useState<EditorLine[]>(
+    invoice?.monthlyItems?.length
+      ? invoice.monthlyItems.map(toEditorLine)
+      : []
+  );
   const [notes, setNotes] = useState(invoice?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -168,9 +173,20 @@ export function InvoiceEditor({
     () => lineItems.map(toInvoiceLine),
     [lineItems]
   );
+  const parsedMonthly = useMemo(
+    () =>
+      monthlyItems
+        .map(toInvoiceLine)
+        .filter((l) => l.description.trim()),
+    [monthlyItems]
+  );
   const totals = useMemo(
     () => computeInvoiceTotals(parsedLines),
     [parsedLines]
+  );
+  const monthlyTotals = useMemo(
+    () => computeInvoiceTotals(parsedMonthly),
+    [parsedMonthly]
   );
 
   const clientProjects = useMemo(
@@ -213,6 +229,12 @@ export function InvoiceEditor({
     );
   }
 
+  function updateMonthlyLine(index: number, patch: Partial<EditorLine>) {
+    setMonthlyItems((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    );
+  }
+
   function buildInput(): InvoiceInput {
     return {
       clientId: clientId || null,
@@ -222,6 +244,7 @@ export function InvoiceEditor({
       dueDate,
       currency,
       lineItems: parsedLines,
+      monthlyItems: parsedMonthly,
       notes,
     };
   }
@@ -392,8 +415,13 @@ export function InvoiceEditor({
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Line items</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">One-time</CardTitle>
+                <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                  Setup, build, launch — billed once.
+                </p>
+              </div>
               <Button
                 type="button"
                 size="sm"
@@ -417,7 +445,7 @@ export function InvoiceEditor({
                       onChange={(e) =>
                         updateLine(index, { description: e.target.value })
                       }
-                      placeholder="Monthly retainer"
+                      placeholder="Website build"
                       required
                     />
                   </div>
@@ -480,6 +508,115 @@ export function InvoiceEditor({
                   </div>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Monthly</CardTitle>
+                <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                  Hosting, support, retainer — optional on the document.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setMonthlyItems((rows) => [...rows, emptyLine()])
+                }
+              >
+                <Plus className="size-3.5" />
+                Add line
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {monthlyItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No monthly items — add hosting or support if needed.
+                </p>
+              ) : (
+                monthlyItems.map((line, index) => (
+                  <div
+                    key={index}
+                    className="grid gap-3 rounded-md border border-border/70 p-3 sm:grid-cols-[1fr_5rem_5rem_6rem_5rem_auto]"
+                  >
+                    <div className="sm:col-span-1">
+                      <Label className="mb-1.5">Description</Label>
+                      <Input
+                        value={line.description}
+                        onChange={(e) =>
+                          updateMonthlyLine(index, {
+                            description: e.target.value,
+                          })
+                        }
+                        placeholder="Hosting + support"
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1.5">Qty</Label>
+                      <Input
+                        inputMode="decimal"
+                        value={line.qty}
+                        onChange={(e) =>
+                          updateMonthlyLine(index, { qty: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1.5">Unit</Label>
+                      <Input
+                        value={line.unit}
+                        onChange={(e) =>
+                          updateMonthlyLine(index, { unit: e.target.value })
+                        }
+                        placeholder="mo"
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1.5">Unit price</Label>
+                      <Input
+                        inputMode="decimal"
+                        value={line.unitPrice}
+                        onChange={(e) =>
+                          updateMonthlyLine(index, {
+                            unitPrice: e.target.value,
+                          })
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1.5">Tax %</Label>
+                      <Input
+                        inputMode="decimal"
+                        value={line.taxRate}
+                        onChange={(e) =>
+                          updateMonthlyLine(index, {
+                            taxRate: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() =>
+                          setMonthlyItems((rows) =>
+                            rows.filter((_, i) => i !== index)
+                          )
+                        }
+                        aria-label="Remove monthly line"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -572,11 +709,22 @@ export function InvoiceEditor({
                 </span>
               </div>
               <div className="flex justify-between border-t pt-2 text-base font-semibold">
-                <span>Total</span>
+                <span>One-time</span>
                 <span className="tabular-nums">
                   {money(currency, totals.total)}
                 </span>
               </div>
+              {monthlyTotals.total > 0 ? (
+                <div className="flex justify-between pt-1 text-sm font-semibold">
+                  <span>Monthly</span>
+                  <span className="tabular-nums">
+                    {money(currency, monthlyTotals.total)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      / mo
+                    </span>
+                  </span>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>

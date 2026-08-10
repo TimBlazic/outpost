@@ -75,11 +75,15 @@ export type InvoiceInput = {
   dueDate: string;
   currency: Invoice["currency"];
   lineItems: InvoiceLineItem[];
+  monthlyItems: InvoiceLineItem[];
   notes: string;
 };
 
 function buildMoneyFields(input: InvoiceInput) {
-  const totals = computeInvoiceTotals(input.lineItems);
+  const lineItems = input.lineItems;
+  const monthlyItems = input.monthlyItems ?? [];
+  const totals = computeInvoiceTotals(lineItems);
+  const monthly = computeInvoiceTotals(monthlyItems);
   return {
     clientId: input.clientId,
     projectId: input.projectId,
@@ -87,9 +91,11 @@ function buildMoneyFields(input: InvoiceInput) {
     issueDate: input.issueDate || today(),
     dueDate: input.dueDate || today(),
     currency: input.currency || "EUR",
-    lineItems: input.lineItems,
+    lineItems,
+    monthlyItems,
     notes: input.notes ?? "",
     ...totals,
+    monthlyTotal: monthly.total,
   };
 }
 
@@ -170,6 +176,7 @@ export async function createInvoiceFromPayment(
         taxRate: 0,
       },
     ],
+    monthlyItems: [],
     notes: "",
   });
 

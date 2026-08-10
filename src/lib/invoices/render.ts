@@ -38,9 +38,17 @@ export async function renderInvoicePdf(
       unitPrice: l.unitPrice,
       taxRate: l.taxRate,
     })),
+    monthlyItems: (invoice.monthlyItems ?? []).map((l) => ({
+      description: l.description,
+      qty: l.qty,
+      unit: l.unit || null,
+      unitPrice: l.unitPrice,
+      taxRate: l.taxRate,
+    })),
     subtotal: invoice.subtotal,
     taxTotal: invoice.taxTotal,
     total: invoice.total,
+    monthlyTotal: invoice.monthlyTotal ?? 0,
     notes: invoice.notes || null,
   };
 

@@ -1792,9 +1792,13 @@ export type Invoice = {
   paidAt: string | null;
   currency: "EUR" | "USD" | "GBP";
   lineItems: InvoiceLineItem[];
+  /** Recurring / retainer items — separate from one-time lineItems. */
+  monthlyItems: InvoiceLineItem[];
   subtotal: number;
   taxTotal: number;
   total: number;
+  /** Payable monthly amount (incl. tax on monthlyItems). */
+  monthlyTotal: number;
   notes: string;
   createdBy: string | null;
   createdAt: string;
@@ -1816,6 +1820,16 @@ export function computeInvoiceTotals(lineItems: InvoiceLineItem[]) {
   };
 }
 
+function normalizeInvoiceLineItems(items: InvoiceLineItem[] | undefined) {
+  return (items ?? []).map((l) => ({
+    description: l.description ?? "",
+    qty: Number(l.qty) || 0,
+    unit: l.unit ?? "",
+    unitPrice: Number(l.unitPrice) || 0,
+    taxRate: Number(l.taxRate) || 0,
+  }));
+}
+
 export function snapshotFromClient(client: Client): InvoiceClientSnapshot {
   return {
     // Invoices bill the company only — contact name stays off the PDF.
@@ -1830,14 +1844,10 @@ export function snapshotFromClient(client: Client): InvoiceClientSnapshot {
 }
 
 export function normalizeInvoice(inv: Invoice): Invoice {
-  const lineItems = (inv.lineItems ?? []).map((l) => ({
-    description: l.description ?? "",
-    qty: Number(l.qty) || 0,
-    unit: l.unit ?? "",
-    unitPrice: Number(l.unitPrice) || 0,
-    taxRate: Number(l.taxRate) || 0,
-  }));
+  const lineItems = normalizeInvoiceLineItems(inv.lineItems);
+  const monthlyItems = normalizeInvoiceLineItems(inv.monthlyItems);
   const totals = computeInvoiceTotals(lineItems);
+  const monthly = computeInvoiceTotals(monthlyItems);
   return {
     ...inv,
     clientSnapshot: {
@@ -1850,9 +1860,11 @@ export function normalizeInvoice(inv: Invoice): Invoice {
       registrationNumber: inv.clientSnapshot?.registrationNumber ?? "",
     },
     lineItems,
+    monthlyItems,
     subtotal: totals.subtotal,
     taxTotal: totals.taxTotal,
     total: totals.total,
+    monthlyTotal: monthly.total,
     notes: inv.notes ?? "",
     invoiceNumber: inv.invoiceNumber ?? null,
     year: inv.year ?? null,
@@ -1905,9 +1917,12 @@ export type Quote = {
   /** Free-text estimate, e.g. "3–4 tedne". Empty = omit from quote. */
   projectDuration: string;
   lineItems: QuoteLineItem[];
+  /** Recurring / retainer items — separate from one-time lineItems. */
+  monthlyItems: QuoteLineItem[];
   currency: "EUR";
   subtotal: number;
   total: number;
+  monthlyTotal: number;
   validUntil: string | null;
   sentAt: string | null;
   createdBy: string | null;
@@ -1924,12 +1939,18 @@ export function computeQuoteTotals(items: QuoteLineItem[]) {
   return { subtotal: rounded, total: rounded };
 }
 
-export function normalizeQuote(q: Quote): Quote {
-  const lineItems = (q.lineItems ?? []).map((l) => ({
+function normalizeQuoteLineItems(items: QuoteLineItem[] | undefined) {
+  return (items ?? []).map((l) => ({
     description: (l.description ?? "").trim(),
     amount: Number.isFinite(Number(l.amount)) ? Number(l.amount) : 0,
   }));
+}
+
+export function normalizeQuote(q: Quote): Quote {
+  const lineItems = normalizeQuoteLineItems(q.lineItems);
+  const monthlyItems = normalizeQuoteLineItems(q.monthlyItems);
   const totals = computeQuoteTotals(lineItems);
+  const monthly = computeQuoteTotals(monthlyItems);
   const locale = q.locale === "en" ? "en" : "sl";
   const status = (quoteStatuses as readonly string[]).includes(q.status)
     ? q.status
@@ -1951,9 +1972,11 @@ export function normalizeQuote(q: Quote): Quote {
     discoveryNotes: q.discoveryNotes ?? "",
     projectDuration: (q.projectDuration ?? "").trim(),
     lineItems,
+    monthlyItems,
     currency: "EUR",
     subtotal: totals.subtotal,
     total: totals.total,
+    monthlyTotal: monthly.total,
     validUntil: q.validUntil ?? null,
     sentAt: q.sentAt ?? null,
     createdBy: q.createdBy ?? null,
