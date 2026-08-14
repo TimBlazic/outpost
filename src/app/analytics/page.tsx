@@ -21,6 +21,8 @@ import {
   fetchSiteAnalyticsReport,
   getWebAnalyticsConfig,
 } from "@/lib/vercel/web-analytics";
+import { getFunnelReport } from "@/lib/inbound/events";
+import { MousePointerClick } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -39,14 +41,69 @@ export default async function AnalyticsPage({
   const range = parseDashboardRange(rangeParam);
   const rangeLabel = dashboardRangeLabels[range];
   const config = getWebAnalyticsConfig();
+  const funnel = await getFunnelReport(range);
+
+  const funnelCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <MousePointerClick className="size-4" />
+          Site funnel
+        </CardTitle>
+        <CardDescription>
+          First-party events from timblazic.dev · {rangeLabel.toLowerCase()}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+          <StatCard label="Sessions" value={fmt(funnel.sessions)} icon={Users} />
+          <StatCard label="CTA clicks" value={fmt(funnel.ctaClicks)} icon={MousePointerClick} />
+          <StatCard label="Form started" value={fmt(funnel.formStarts)} icon={BarChart3} />
+          <StatCard label="Submitted" value={fmt(funnel.formSubmits)} icon={BarChart3} />
+          <StatCard label="Example clicks" value={fmt(funnel.exampleClicks)} icon={Globe2} />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <p className="mb-3 text-sm font-medium">By source</p>
+            {funnel.bySource.length ? (
+              <RankBarChart
+                data={funnel.bySource.map((row) => ({
+                  name: row.key,
+                  value: row.sessions,
+                }))}
+              />
+            ) : (
+              <p className="py-8 text-sm text-muted-foreground">No events in this range yet.</p>
+            )}
+          </div>
+          <div>
+            <p className="mb-3 text-sm font-medium">By campaign</p>
+            {funnel.byCampaign.length ? (
+              <RankBarChart
+                data={funnel.byCampaign.map((row) => ({
+                  name: row.key,
+                  value: row.sessions,
+                }))}
+              />
+            ) : (
+              <p className="py-8 text-sm text-muted-foreground">No campaign data yet.</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   if (!config) {
     return (
       <div className="space-y-6 p-4 lg:p-6">
         <PageHeader
           title="Analytics"
-          description="timblazic.dev traffic from Vercel Web Analytics."
-        />
+          description="timblazic.dev funnel and Vercel traffic."
+        >
+          <DashboardRangeSelect value={range} basePath="/analytics" />
+        </PageHeader>
+        {funnelCard}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -107,9 +164,9 @@ VERCEL_WEB_ANALYTICS_LABEL=timblazic.dev`}
 
   return (
     <div className="space-y-6 p-4 lg:p-6">
-      <PageHeader
+        <PageHeader
         title="Analytics"
-        description={`${config.label} · ${rangeLabel.toLowerCase()} · Vercel Web Analytics`}
+        description={`${config.label} · ${rangeLabel.toLowerCase()}`}
       >
         <div className="flex flex-wrap items-center gap-2">
           <a
@@ -123,6 +180,8 @@ VERCEL_WEB_ANALYTICS_LABEL=timblazic.dev`}
           <DashboardRangeSelect value={range} basePath="/analytics" />
         </div>
       </PageHeader>
+
+      {funnelCard}
 
       {error ? (
         <Card>

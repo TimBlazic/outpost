@@ -8,6 +8,7 @@ import {
   getAttachmentsFor,
   getQuotesForLead,
 } from "@/lib/store";
+import { getSiteEventsForLead } from "@/lib/inbound/events";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,12 @@ export default async function LeadDetailPage({
   const lead = await getLeadById(id);
   if (!lead) notFound();
 
-  const [activities, notes, files, quotes] = await Promise.all([
+  const [activities, notes, files, quotes, siteEvents] = await Promise.all([
     getActivitiesForLead(id),
     getNotesForLead(id),
     getAttachmentsFor("lead", id),
     getQuotesForLead(id),
+    getSiteEventsForLead(id),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function LeadDetailPage({
       notes={notes}
       files={files}
       quotes={quotes}
+      siteEvents={siteEvents}
     />
   );
 }

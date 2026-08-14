@@ -44,7 +44,9 @@ export async function updateSession(request: NextRequest) {
   const isLogin = pathname === "/login" || pathname === "/client-login";
   const isAuthCallback = pathname.startsWith("/auth");
   const isPortal = pathname.startsWith("/portal");
-  const isInboundApi = pathname.startsWith("/api/leads/inbound");
+  const isInboundApi =
+    pathname.startsWith("/api/leads/inbound") ||
+    pathname.startsWith("/api/events/inbound");
   // Cron routes authenticate with CRON_SECRET themselves.
   const isCronApi = pathname.startsWith("/api/cron/");
 

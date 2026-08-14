@@ -64,6 +64,8 @@ import { LeadQuickActions } from "@/components/lead-quick-actions";
 import { GenerateEmailButton } from "@/components/generate-email-button";
 import { QualifyLeadButton } from "@/components/qualify-lead-button";
 import { QualifyScoreDonut } from "@/components/qualify-score-donut";
+import { SiteJourney } from "@/components/site-journey";
+import type { SiteEvent } from "@/lib/site-events";
 import { Markdown } from "@/components/markdown";
 import { StatusPill } from "@/components/status-pill";
 import {
@@ -176,6 +178,7 @@ export function LeadDetail({
   notes: rawNotes,
   files,
   quotes = [],
+  siteEvents = [],
   mode = "page",
   onClose,
   onChanged,
@@ -185,6 +188,7 @@ export function LeadDetail({
   notes: Note[];
   files: Attachment[];
   quotes?: Quote[];
+  siteEvents?: SiteEvent[];
   mode?: "page" | "drawer";
   onClose?: () => void;
   /** Reload activities/notes/files after a mutation (drawer). */
@@ -406,6 +410,8 @@ export function LeadDetail({
             </a>
           )}
         </div>
+
+        <SiteJourney events={siteEvents} />
 
         {lead.description?.trim() ? (
           <div className="rounded-xl border border-border/70 bg-card/60 px-4 py-3 text-sm text-muted-foreground">

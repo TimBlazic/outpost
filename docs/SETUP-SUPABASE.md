@@ -148,6 +148,12 @@ Public endpoint (API key required, no login):
 
 `POST /api/leads/inbound`
 
+Site funnel events (no database on timblazic.dev):
+
+`POST /api/events/inbound`
+
+Same `Authorization: Bearer <OUTPOST_INGEST_SECRET>`. Apply migration `20260814120000_site_events.sql`.
+
 Headers:
 
 ```

@@ -27,6 +27,17 @@ export type InboundLeadPayload = {
   message: string;
   locale?: string;
   source?: string;
+  sessionId?: string;
+  attribution?: {
+    landingPath?: string;
+    referrer?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmContent?: string;
+    utmTerm?: string;
+    gclid?: string;
+  };
 };
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
@@ -99,6 +110,18 @@ function resolveLabel(
   return fallback || labels[key] || key;
 }
 
+function attributionLines(payload: InboundLeadPayload) {
+  const attr = payload.attribution;
+  if (!attr) return [];
+  const source = attr.utmSource || attr.referrer || "";
+  return [
+    source ? `**Source:** ${source}` : null,
+    attr.utmCampaign ? `**Campaign:** ${attr.utmCampaign}` : null,
+    attr.gclid ? `**gclid:** ${attr.gclid}` : null,
+    attr.landingPath ? `**Landing:** ${attr.landingPath}` : null,
+  ].filter((line) => line !== null);
+}
+
 function buildNoteBody(payload: InboundLeadPayload) {
   const typeLabel = resolveLabel(
     payload.projectType,
@@ -115,6 +138,7 @@ function buildNoteBody(payload: InboundLeadPayload) {
     `**Type:** ${typeLabel}`,
     `**Budget:** ${budgetLabel}`,
     payload.locale ? `**Locale:** ${payload.locale}` : null,
+    ...attributionLines(payload),
     "",
     "**Message:**",
     payload.message.trim(),
@@ -156,6 +180,7 @@ export async function createInboundLead(payload: InboundLeadPayload) {
     `**Type:** ${typeLabel}`,
     `**Budget:** ${budgetLabel}`,
     payload.locale ? `**Locale:** ${payload.locale}` : null,
+    ...attributionLines(payload),
     "",
     "**Message:**",
     message,
@@ -278,6 +303,25 @@ export async function createInboundLead(payload: InboundLeadPayload) {
     await syncLeadNoteCount(leadId);
     const activities = await getActivities();
     await saveActivities([activity, ...activities]);
+  }
+
+  if (payload.sessionId) {
+    try {
+      const { attachSessionToLead, ingestSiteEvent } = await import(
+        "@/lib/inbound/events"
+      );
+      await ingestSiteEvent({
+        sessionId: payload.sessionId,
+        event: "form_submit",
+        path: payload.attribution?.landingPath,
+        locale: payload.locale,
+        referrer: payload.attribution?.referrer,
+        attribution: payload.attribution,
+      });
+      await attachSessionToLead(payload.sessionId, leadId);
+    } catch (err) {
+      console.error("[inbound lead] site event attach failed", err);
+    }
   }
 
   try {

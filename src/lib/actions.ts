@@ -122,13 +122,15 @@ async function notifyTicketWaiting(input: {
 export async function getLeadDetailAction(id: string) {
   const lead = await getLeadById(id);
   if (!lead) return null;
-  const [activities, notes, files, quotes] = await Promise.all([
+  const { getSiteEventsForLead } = await import("@/lib/inbound/events");
+  const [activities, notes, files, quotes, siteEvents] = await Promise.all([
     getActivitiesForLead(id),
     getNotesForLead(id),
     getAttachmentsFor("lead", id),
     getQuotesForLead(id),
+    getSiteEventsForLead(id),
   ]);
-  return { lead, activities, notes, files, quotes };
+  return { lead, activities, notes, files, quotes, siteEvents };
 }
 
 // ---- Leads ----------------------------------------------------------------

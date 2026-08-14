@@ -23,6 +23,7 @@ import {
   type Note,
   type Quote,
 } from "@/lib/data";
+import type { SiteEvent } from "@/lib/site-events";
 import { getLeadDetailAction } from "@/lib/actions";
 import { eur, fmtDate, fmtDateTime, dueState, leadStatusColor } from "@/lib/format";
 import {
@@ -107,6 +108,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
     notes: Note[];
     files: Attachment[];
     quotes: Quote[];
+    siteEvents: SiteEvent[];
   } | null>(null);
   const [bundleLoading, setBundleLoading] = useState(false);
 
@@ -163,6 +165,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
         notes: data.notes,
         files: data.files,
         quotes: data.quotes,
+        siteEvents: data.siteEvents,
       });
     } finally {
       setBundleLoading(false);
@@ -557,6 +560,7 @@ export function LeadsView({ leads: allLeads }: { leads: Lead[] }) {
             notes={bundle.notes}
             files={bundle.files}
             quotes={bundle.quotes}
+            siteEvents={bundle.siteEvents}
             mode="drawer"
             onClose={closePanel}
             onChanged={() => {
