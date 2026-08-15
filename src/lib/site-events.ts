@@ -4,6 +4,7 @@ export const SITE_EVENT_NAMES = [
   "form_start",
   "form_submit",
   "example_click",
+  "package_info",
 ] as const;
 
 export type SiteEventName = (typeof SITE_EVENT_NAMES)[number];
@@ -68,7 +69,9 @@ export function eventLabel(event: SiteEvent) {
   if (event.event === "page_view") return `Viewed ${event.path || "/"}`;
   if (event.event === "form_start") return "Started the form";
   if (event.event === "form_submit") return "Submitted the form";
-  if (event.event === "example_click") return "Clicked example site";
+  if (event.event === "package_info" || event.event === "example_click") {
+    return "Opened package page";
+  }
   const targets: Record<string, string> = {
     hero_primary: "Clicked hero CTA",
     nav: "Clicked nav CTA",

@@ -188,7 +188,7 @@ export type FunnelReport = {
   ctaClicks: number;
   formStarts: number;
   formSubmits: number;
-  exampleClicks: number;
+  packageInfo: number;
   bySource: { key: string; sessions: number; submits: number }[];
   byCampaign: { key: string; sessions: number; submits: number }[];
 };
@@ -201,7 +201,7 @@ export async function getFunnelReport(range: DashboardRange): Promise<FunnelRepo
     ctaClicks: 0,
     formStarts: 0,
     formSubmits: 0,
-    exampleClicks: 0,
+    packageInfo: 0,
     bySource: [],
     byCampaign: [],
   };
@@ -265,7 +265,8 @@ export async function getFunnelReport(range: DashboardRange): Promise<FunnelRepo
     ctaClicks: countSessions("cta_click"),
     formStarts: countSessions("form_start"),
     formSubmits: countSessions("form_submit"),
-    exampleClicks: countSessions("example_click"),
+    packageInfo:
+      countSessions("package_info") + countSessions("example_click"),
     bySource: rank(sourceMap),
     byCampaign: rank(campaignMap),
   };

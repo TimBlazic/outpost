@@ -60,7 +60,7 @@ export default async function AnalyticsPage({
           <StatCard label="CTA clicks" value={fmt(funnel.ctaClicks)} icon={MousePointerClick} />
           <StatCard label="Form started" value={fmt(funnel.formStarts)} icon={BarChart3} />
           <StatCard label="Submitted" value={fmt(funnel.formSubmits)} icon={BarChart3} />
-          <StatCard label="Example clicks" value={fmt(funnel.exampleClicks)} icon={Globe2} />
+          <StatCard label="Package info" value={fmt(funnel.packageInfo)} icon={Globe2} />
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
